@@ -519,6 +519,8 @@ if OS == "Darwin":
             1<<6 |  # NSWindowCollectionBehaviorStationary
             1<<12   # NSWindowCollectionBehaviorFullScreenAuxiliary
         )
+        win.setHidesOnDeactivate_(False)   # NEVER hide when app loses focus
+        win.setCanHide_(False)             # ignore "Hide Others" too
         win.setIgnoresMouseEvents_(False)
         win.setAcceptsMouseMovedEvents_(True)
 
