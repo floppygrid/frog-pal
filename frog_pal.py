@@ -182,7 +182,6 @@ if OS == "Darwin":
         NSApplication, NSApp, NSWindow, NSView, NSColor,
         NSBezierPath, NSFont, NSScreen,
         NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
-        NSFloatingWindowLevel, NSStatusWindowLevel,
         NSApplicationActivationPolicyAccessory,
         NSMenu, NSMenuItem,
         NSMutableParagraphStyle, NSCenterTextAlignment, NSLeftTextAlignment,
@@ -472,7 +471,8 @@ if OS == "Darwin":
             bwin.setBackgroundColor_(NSColor.clearColor())
             bwin.setOpaque_(False)
             bwin.setHasShadow_(True)
-            bwin.setLevel_(NSStatusWindowLevel)
+            bwin.setLevel_(1001)           # one above frog (1000)
+            bwin.setHidesOnDeactivate_(False)
             bwin.setIgnoresMouseEvents_(False)
             bwin.setAcceptsMouseMovedEvents_(True)
 
@@ -482,6 +482,10 @@ if OS == "Darwin":
             bwin.orderFrontRegardless()
 
             self._bubble_win = bwin
+
+            # Re-raise frog so it stays visible alongside bubble
+            if self._frog_win:
+                self._frog_win.orderFrontRegardless()
 
         def _close_bubble(self):
             if self._bubble_win:
@@ -513,11 +517,12 @@ if OS == "Darwin":
         win.setBackgroundColor_(NSColor.clearColor())
         win.setOpaque_(False)
         win.setHasShadow_(False)
-        win.setLevel_(NSStatusWindowLevel)         # above all normal windows
+        # Level 1000 = NSScreenSaverWindowLevel — above Finder, Dock, everything
+        win.setLevel_(1000)
         win.setCollectionBehavior_(
-            1<<3 |  # NSWindowCollectionBehaviorCanJoinAllSpaces
-            1<<6 |  # NSWindowCollectionBehaviorStationary
-            1<<12   # NSWindowCollectionBehaviorFullScreenAuxiliary
+            1  |   # NSWindowCollectionBehaviorCanJoinAllSpaces
+            16 |   # NSWindowCollectionBehaviorStationary
+            64     # NSWindowCollectionBehaviorIgnoresCycle
         )
         win.setHidesOnDeactivate_(False)   # NEVER hide when app loses focus
         win.setCanHide_(False)             # ignore "Hide Others" too
