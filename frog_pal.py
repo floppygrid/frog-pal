@@ -160,23 +160,36 @@ class FrogPal:
     # ── Window setup ──────────────────────────────────────────────────────────
 
     def _setup_window(self):
-        self.root.overrideredirect(True)   # no title bar / frame
-        self.root.attributes("-topmost", True)
-        self.root.geometry(f"{CANVAS_W}x{CANVAS_H}+100+100")
-
         os_name = platform.system()
+
         if os_name == "Darwin":
-            # macOS: "systemTransparent" makes the window truly see-through
+            # ── macOS: strip ALL window chrome via the internal Tk/macOS API ──
+            # Must happen BEFORE overrideredirect and BEFORE mainloop
             self.root.wm_attributes("-transparent", True)
             self.root.configure(bg=TRANSPARENT_COLOR)
+            # 'floating' = always-on-top panel, 'none' = zero decorations
+            self.root.tk.call(
+                "::tk::unsupported::MacWindowStyle",
+                "style", self.root._w, "floating", "none"
+            )
+            self.root.overrideredirect(True)
+            self.root.attributes("-topmost", True)
+
         elif os_name == "Windows":
             WIN_CHROMA = "#010101"
+            self.root.overrideredirect(True)
             self.root.configure(bg=WIN_CHROMA)
             self.root.attributes("-transparentcolor", WIN_CHROMA)
+            self.root.attributes("-topmost", True)
+
         else:
-            # Linux: needs a compositor; fall back to near-opaque
+            # Linux: needs a compositor for true transparency
+            self.root.overrideredirect(True)
             self.root.configure(bg="black")
             self.root.attributes("-alpha", 0.95)
+            self.root.attributes("-topmost", True)
+
+        self.root.geometry(f"{CANVAS_W}x{CANVAS_H}+100+100")
 
     def _setup_canvas(self):
         self.canvas = tk.Canvas(
