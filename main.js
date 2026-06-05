@@ -93,17 +93,21 @@ app.whenReady().then(() => {
   // Test reminder 20 s after launch
   setTimeout(() => win.webContents.send('remind'), TEST_DELAY_MS)
 
-  let lastRemindHour = -1
+  // Check every 60 s. Track fired reminders by "YYYY-MM-DD-HH" so each
+  // scheduled hour fires exactly once per day, no matter how many ticks land.
+  const fired = new Set()
+
   setInterval(() => {
-    const d  = new Date()
-    const h  = d.getHours()
-    const m  = d.getMinutes()
-    if (REMINDER_HOURS.has(h) && m === 0 && h !== lastRemindHour) {
-      lastRemindHour = h
-      win.webContents.send('remind')
-    }
-    if (m !== 0) lastRemindHour = -1   // reset so same hour can fire again next day
-  }, 30_000)
+    const now  = new Date()
+    const h    = now.getHours()
+    const m    = now.getMinutes()
+    if (!REMINDER_HOURS.has(h)) return          // not a reminder hour
+    if (m > 1) return                           // only fire within first 2 min of the hour
+    const key = `${now.toDateString()}-${h}`
+    if (fired.has(key)) return                  // already fired this hour today
+    fired.add(key)
+    win.webContents.send('remind')
+  }, 60_000)   // check every 60 seconds
 })
 
 app.on('window-all-closed', () => app.quit())
