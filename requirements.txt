@@ -1,1 +1,4 @@
 plyer>=2.1.0
+
+# macOS only — native transparent window (pre-installed on macOS, pip install if missing)
+pyobjc-framework-Cocoa>=9.0; sys_platform == "darwin"
