@@ -17,7 +17,7 @@ REMINDER_INTERVAL_MINUTES = 30
 PIXEL_SIZE = 4
 CANVAS_W = 80
 CANVAS_H = 80
-TRANSPARENT_COLOR = "#010101"
+TRANSPARENT_COLOR = "systemTransparent"
 IDLE_ANIM_FPS = 8
 BOB_PERIOD_FRAMES = 24
 
@@ -160,19 +160,22 @@ class FrogPal:
     # ── Window setup ──────────────────────────────────────────────────────────
 
     def _setup_window(self):
-        self.root.overrideredirect(True)   # no title bar
+        self.root.overrideredirect(True)   # no title bar / frame
         self.root.attributes("-topmost", True)
         self.root.geometry(f"{CANVAS_W}x{CANVAS_H}+100+100")
-        self.root.configure(bg=TRANSPARENT_COLOR)
 
         os_name = platform.system()
         if os_name == "Darwin":
-            self.root.attributes("-transparent", True)
-            self.root.wm_attributes("-alpha", 1.0)
+            # macOS: "systemTransparent" makes the window truly see-through
+            self.root.wm_attributes("-transparent", True)
+            self.root.configure(bg=TRANSPARENT_COLOR)
         elif os_name == "Windows":
-            self.root.attributes("-transparentcolor", TRANSPARENT_COLOR)
+            WIN_CHROMA = "#010101"
+            self.root.configure(bg=WIN_CHROMA)
+            self.root.attributes("-transparentcolor", WIN_CHROMA)
         else:
-            # Linux: compositing required for true transparency; use alpha fallback
+            # Linux: needs a compositor; fall back to near-opaque
+            self.root.configure(bg="black")
             self.root.attributes("-alpha", 0.95)
 
     def _setup_canvas(self):
@@ -180,8 +183,9 @@ class FrogPal:
             self.root,
             width=CANVAS_W,
             height=CANVAS_H,
-            bg=TRANSPARENT_COLOR,
+            bg=TRANSPARENT_COLOR,   # "systemTransparent" on macOS
             highlightthickness=0,
+            borderwidth=0,
         )
         self.canvas.pack()
 
