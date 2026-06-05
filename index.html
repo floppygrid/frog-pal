@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 240px;
+      height: 196px;
+      background: transparent;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #app {
+      position: relative;
+      width: 240px;
+      height: 196px;
+    }
+
+    /* ── Bubble area (top 100 px) ────────────────────────────────── */
+    #bubble-wrap {
+      position: absolute;
+      top: 0; left: 0;
+      width: 240px;
+      height: 100px;
+      pointer-events: none;   /* invisible by default — pass through */
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    #bubble-wrap.visible {
+      pointer-events: auto;
+      opacity: 1;
+    }
+
+    #bubble-box {
+      position: absolute;
+      top: 0; left: 0;
+      width: 236px;
+      height: 78px;
+      margin: 0 2px;
+      background: #ffe80a;
+      border: 2px solid #a07800;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 32px 0 10px;
+    }
+
+    #bubble-text {
+      font-family: -apple-system, Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1a0a00;
+      text-align: center;
+      line-height: 1.35;
+    }
+
+    #bubble-close {
+      position: absolute;
+      top: 6px; right: 6px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #d03010;
+      border: none;
+      color: white;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    #bubble-close:hover { background: #a81a05; }
+
+    /* tail triangle pointing down */
+    #bubble-tail {
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left:  11px solid transparent;
+      border-right: 11px solid transparent;
+      border-top:   14px solid #ffe80a;
+      filter: drop-shadow(0 1px 0 #a07800);
+    }
+
+    /* ── Frog canvas (bottom 96 px) ──────────────────────────────── */
+    #frog-canvas {
+      position: absolute;
+      top: 100px; left: 0;
+      width: 240px;
+      height: 96px;
+      cursor: grab;
+    }
+    #frog-canvas:active { cursor: grabbing; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="bubble-wrap">
+      <div id="bubble-box">
+        <span id="bubble-text"></span>
+        <button id="bubble-close">✕</button>
+      </div>
+      <div id="bubble-tail"></div>
+    </div>
+    <canvas id="frog-canvas" width="240" height="96"></canvas>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

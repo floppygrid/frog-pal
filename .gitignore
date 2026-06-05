@@ -7,3 +7,4 @@ build/
 venv/
 .DS_Store
 *.spec
+node_modules/

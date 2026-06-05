@@ -1,0 +1,12 @@
+{
+  "name": "frogpal",
+  "version": "2.0.0",
+  "description": "Transparent pixel-art desktop frog with water reminders",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^31.0.0"
+  }
+}
