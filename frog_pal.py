@@ -1,50 +1,42 @@
 """
 FrogPal — transparent pixel-art desktop frog with water reminders.
 
-macOS  → PyObjC  (native NSWindow, true per-pixel transparency, no chrome)
+macOS  → PyObjC (NSWindow, true transparency, always on top)
 Windows/Linux → tkinter fallback
 
-Reminders: every 2 hours from 6 am to 10 pm
-           → speech bubble pops up from the frog + cute ribbit sound
+- Frog starts centered on screen, stays on top of ALL windows always
+- Water reminders every 2 hours from 6am–10pm
+- Yellow speech bubble pops above frog with a close ✕ button
+- Frog NEVER disappears — bubble is a separate floating window
+- Cute frog ribbit sound on every reminder
 """
 
-import platform
-import sys
-import threading
-import time
-import random
-import datetime
-import math
-import wave
-import struct
-import tempfile
-import subprocess
-import os
+import platform, sys, threading, time, random, datetime
+import math, wave, struct, tempfile, subprocess, os
 
 OS = platform.system()
 
-# ── Reminder schedule ─────────────────────────────────────────────────────────
-# Fires at these hours (24h): 6,8,10,12,14,16,18,20,22
+# ── Schedule: hours to remind (24h) ──────────────────────────────────────────
 REMINDER_HOURS = {6, 8, 10, 12, 14, 16, 18, 20, 22}
 
 # ── Pixel art config ──────────────────────────────────────────────────────────
-PIXEL_SIZE   = 6
-COLS, ROWS   = 16, 16
-WIN_W = COLS * PIXEL_SIZE
-WIN_H = ROWS * PIXEL_SIZE
-IDLE_FPS     = 8
-BOB_PERIOD   = 24
+PIXEL_SIZE  = 6
+COLS = ROWS = 16
+WIN_W = COLS * PIXEL_SIZE   # 96 px
+WIN_H = ROWS * PIXEL_SIZE   # 96 px
+IDLE_FPS    = 8
+BOB_PERIOD  = 24
 
-# ── Colour palette ─────────────────────────────────────────────────────────────
+# ── Colour palette (R,G,B) ────────────────────────────────────────────────────
 PALETTE = {
     0: None,
-    1: (45,  106, 45),
-    2: (76,  175, 80),
-    3: (129, 199, 132),
-    4: (27,  94,  32),
-    5: (255, 255, 255),
-    6: (33,  33,  33),
-    7: (244, 143, 177),
+    1: (45, 106, 45),
+    2: (76, 175, 80),
+    3: (129,199,132),
+    4: (27,  94, 32),
+    5: (255,255,255),
+    6: (33,  33, 33),
+    7: (244,143,177),
 }
 
 # ── Sprites ───────────────────────────────────────────────────────────────────
@@ -115,34 +107,45 @@ WATER_MSGS = [
 ]
 
 
-# ── Ribbit sound (generated, no external files needed) ────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  Ribbit sound — FM synthesis, no external files
+# ══════════════════════════════════════════════════════════════════════════════
 _RIBBIT_PATH = None
 
 def _make_ribbit_wav():
-    """Synthesise a cute two-chirp ribbit and save to a temp WAV file."""
     sr = 44100
     out = []
 
-    def chirp(freq_start, freq_end, dur, vol=0.6):
+    def frog_pulse(base, mod_freq, mod_depth, dur, vol=0.75):
         n = int(sr * dur)
         for i in range(n):
             t   = i / sr
             pct = i / n
-            freq = freq_start + (freq_end - freq_start) * pct
-            env  = math.sin(math.pi * pct) ** 0.5   # smooth bell envelope
-            out.append(env * vol * math.sin(2 * math.pi * freq * t))
+            # Pitch arc: rises then falls like a real ribbit
+            if pct < 0.35:
+                freq = base + mod_depth * (pct / 0.35)
+            else:
+                freq = base + mod_depth * (1 - (pct - 0.35) / 0.65)
+            # Smooth amplitude envelope
+            env = math.sin(math.pi * pct) ** 0.45
+            # Harmonics for froggy timbre
+            s = (0.55 * math.sin(2*math.pi * freq   * t) +
+                 0.28 * math.sin(2*math.pi * freq*2  * t) +
+                 0.12 * math.sin(2*math.pi * freq*3  * t) +
+                 0.05 * math.sin(2*math.pi * freq*0.5* t))
+            out.append(env * vol * s)
 
-    def silence(dur):
+    def gap(dur):
         out.extend([0.0] * int(sr * dur))
 
-    # First chirp: rising then falling
-    chirp(600, 950, 0.08)
-    chirp(950, 700, 0.06)
-    silence(0.05)
-    # Second chirp: slightly higher, shorter
-    chirp(700, 1050, 0.07)
-    chirp(1050, 750, 0.05)
-    silence(0.1)
+    # "Rib-bit" × 2 with a short gap
+    frog_pulse(380, 220, 180, 0.13, vol=0.8)
+    gap(0.04)
+    frog_pulse(420, 260, 200, 0.10, vol=0.75)
+    gap(0.10)
+    frog_pulse(360, 200, 160, 0.11, vol=0.7)
+    gap(0.04)
+    frog_pulse(400, 240, 190, 0.09, vol=0.65)
 
     path = tempfile.mktemp(suffix=".wav")
     with wave.open(path, "w") as f:
@@ -150,8 +153,7 @@ def _make_ribbit_wav():
         f.setsampwidth(2)
         f.setframerate(sr)
         for s in out:
-            clamped = max(-1.0, min(1.0, s))
-            f.writeframes(struct.pack("<h", int(clamped * 32767)))
+            f.writeframes(struct.pack("<h", int(max(-1.0, min(1.0, s)) * 32767)))
     return path
 
 def play_ribbit():
@@ -163,63 +165,59 @@ def play_ribbit():
             subprocess.Popen(["afplay", _RIBBIT_PATH])
         elif OS == "Windows":
             import winsound
-            winsound.PlaySound(_RIBBIT_PATH, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            winsound.PlaySound(_RIBBIT_PATH,
+                               winsound.SND_FILENAME | winsound.SND_ASYNC)
         else:
             subprocess.Popen(["aplay", _RIBBIT_PATH])
     except Exception:
         pass
 
 
-# ── Notification ──────────────────────────────────────────────────────────────
-def send_notification(title, message):
-    if OS == "Darwin":
-        subprocess.Popen([
-            "osascript", "-e",
-            f'display notification "{message}" with title "{title}"'
-        ])
-    else:
-        try:
-            from plyer import notification as pn
-            pn.notify(title=title, message=message, timeout=8)
-        except Exception:
-            print(f"\n🐸 {title}: {message}\n")
-
-
-# ── Reminder schedule helper ──────────────────────────────────────────────────
-def _should_remind(last_reminded_hour):
-    now = datetime.datetime.now()
-    h, m = now.hour, now.minute
-    return h in REMINDER_HOURS and m == 0 and h != last_reminded_hour
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  macOS backend — PyObjC
+#  macOS — PyObjC backend
 # ══════════════════════════════════════════════════════════════════════════════
 if OS == "Darwin":
     import objc
     from AppKit import (
         NSApplication, NSApp, NSWindow, NSView, NSColor,
-        NSBezierPath, NSFont, NSString,
+        NSBezierPath, NSFont, NSScreen,
         NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
-        NSFloatingWindowLevel, NSApplicationActivationPolicyAccessory,
+        NSFloatingWindowLevel, NSStatusWindowLevel,
+        NSApplicationActivationPolicyAccessory,
         NSMenu, NSMenuItem,
-        NSMutableParagraphStyle,
-        NSCenterTextAlignment,
-        NSForegroundColorAttributeName,
-        NSFontAttributeName,
+        NSMutableParagraphStyle, NSCenterTextAlignment, NSLeftTextAlignment,
+        NSForegroundColorAttributeName, NSFontAttributeName,
         NSParagraphStyleAttributeName,
+        NSTrackingArea,
+        NSTrackingMouseEnteredAndExited, NSTrackingActiveAlways,
     )
     from Foundation import (
-        NSObject, NSTimer, NSMakeRect, NSMakePoint,
+        NSObject, NSTimer, NSMakeRect, NSMakePoint, NSMakeSize,
         NSAttributedString,
     )
 
-    # ── Speech bubble window ──────────────────────────────────────────────────
+    # ── Yellow speech bubble with ✕ close button ──────────────────────────────
+    BUBBLE_W  = 230
+    BUBBLE_H  = 80    # body
+    TAIL_H    = 12
+    CLOSE_R   = 10    # radius of close button circle
+    CLOSE_X   = BUBBLE_W - 18
+    CLOSE_Y   = BUBBLE_H - 18
+
     class BubbleView(NSView):
-        def initWithMessage_(self, msg):
-            frame = NSMakeRect(0, 0, 220, 70)
+        def initWithMessage_onClose_(self, msg, close_cb):
+            frame = NSMakeRect(0, 0, BUBBLE_W, BUBBLE_H + TAIL_H)
             self = objc.super(BubbleView, self).initWithFrame_(frame)
-            self._msg = msg
+            if self is None: return None
+            self._msg      = msg
+            self._close_cb = close_cb
+            self._hovering_close = False
+            # Track mouse for close-button hover
+            ta = NSTrackingArea.alloc().initWithRect_options_owner_userInfo_(
+                self.bounds(),
+                NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways,
+                self, None)
+            self.addTrackingArea_(ta)
             return self
 
         def isOpaque(self): return False
@@ -228,99 +226,129 @@ if OS == "Darwin":
             NSColor.clearColor().set()
             NSBezierPath.fillRect_(self.bounds())
 
-            # Bubble body
-            w, h_body = 220, 58
-            radius = 12.0
+            # ── Bubble body (rounded rect above the tail) ─────────────────────
+            r = 14.0
+            w, h = BUBBLE_W, BUBBLE_H
             path = NSBezierPath.bezierPath()
-            path.moveToPoint_(NSMakePoint(radius, h_body))
-            path.lineToPoint_(NSMakePoint(w - radius, h_body))
+            path.moveToPoint_(NSMakePoint(r, h + TAIL_H))
+            path.lineToPoint_(NSMakePoint(w - r, h + TAIL_H))
             path.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_(
-                NSMakePoint(w - radius, h_body - radius), radius, 90, 0)
-            path.lineToPoint_(NSMakePoint(w, radius))
+                NSMakePoint(w - r, h + TAIL_H - r), r, 90, 0)
+            path.lineToPoint_(NSMakePoint(w, TAIL_H + r))
             path.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_(
-                NSMakePoint(w - radius, radius), radius, 0, 270)
-            path.lineToPoint_(NSMakePoint(radius, 0))
+                NSMakePoint(w - r, TAIL_H + r), r, 0, 270)
+            path.lineToPoint_(NSMakePoint(r, TAIL_H))
             path.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_(
-                NSMakePoint(radius, radius), radius, 270, 180)
-            path.lineToPoint_(NSMakePoint(0, h_body - radius))
+                NSMakePoint(r, TAIL_H + r), r, 270, 180)
+            path.lineToPoint_(NSMakePoint(0, h + TAIL_H - r))
             path.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_(
-                NSMakePoint(radius, h_body - radius), radius, 180, 90)
+                NSMakePoint(r, h + TAIL_H - r), r, 180, 90)
             path.closePath()
 
-            # Tail (triangle pointing down toward frog)
+            # Tail triangle (centered, points down toward frog)
             tail = NSBezierPath.bezierPath()
             cx = w / 2
-            tail.moveToPoint_(NSMakePoint(cx - 8, 0))
-            tail.lineToPoint_(NSMakePoint(cx + 8, 0))
-            tail.lineToPoint_(NSMakePoint(cx, -10))
+            tail.moveToPoint_(NSMakePoint(cx - 10, TAIL_H))
+            tail.lineToPoint_(NSMakePoint(cx + 10, TAIL_H))
+            tail.lineToPoint_(NSMakePoint(cx, 0))
             tail.closePath()
 
+            # Yellow fill
             NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                0.18, 0.62, 0.22, 0.93).set()
+                1.0, 0.88, 0.1, 0.96).set()
             path.fill()
             tail.fill()
 
             # Outline
             NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                0.1, 0.4, 0.1, 1.0).set()
-            path.setLineWidth_(1.5)
+                0.7, 0.55, 0.0, 1.0).set()
+            path.setLineWidth_(1.8)
             path.stroke()
+            tail.setLineWidth_(1.8)
+            tail.stroke()
 
-            # Text
+            # ── Close button ──────────────────────────────────────────────────
+            cx_btn, cy_btn = CLOSE_X, CLOSE_Y + TAIL_H
+            btn_rect = NSMakeRect(cx_btn - CLOSE_R, cy_btn - CLOSE_R,
+                                  CLOSE_R*2, CLOSE_R*2)
+            circle = NSBezierPath.bezierPathWithOvalInRect_(btn_rect)
+            if self._hovering_close:
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                    0.85, 0.15, 0.1, 1.0).set()
+            else:
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                    0.9, 0.35, 0.2, 1.0).set()
+            circle.fill()
+
+            NSColor.whiteColor().set()
+            cross = NSBezierPath.bezierPath()
+            off = 4.5
+            cross.moveToPoint_(NSMakePoint(cx_btn - off, cy_btn - off))
+            cross.lineToPoint_(NSMakePoint(cx_btn + off, cy_btn + off))
+            cross.moveToPoint_(NSMakePoint(cx_btn + off, cy_btn - off))
+            cross.lineToPoint_(NSMakePoint(cx_btn - off, cy_btn + off))
+            cross.setLineWidth_(2.0)
+            cross.setLineCapStyle_(1)  # NSRoundLineCapStyle
+            cross.stroke()
+
+            # ── Message text ──────────────────────────────────────────────────
             para = NSMutableParagraphStyle.alloc().init()
             para.setAlignment_(NSCenterTextAlignment)
             attrs = {
-                NSForegroundColorAttributeName: NSColor.whiteColor(),
-                NSFontAttributeName: NSFont.boldSystemFontOfSize_(11),
+                NSForegroundColorAttributeName:
+                    NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                        0.15, 0.1, 0.0, 1.0),
+                NSFontAttributeName: NSFont.boldSystemFontOfSize_(12),
                 NSParagraphStyleAttributeName: para,
             }
-            rect = NSMakeRect(8, 8, 204, 46)
-            self._msg.drawInRect_withAttributes_(rect, attrs)
+            text_rect = NSMakeRect(8, TAIL_H + 10, BUBBLE_W - 36, BUBBLE_H - 20)
+            self._msg.drawInRect_withAttributes_(text_rect, attrs)
 
-    class BubbleWindow(NSWindow):
-        @classmethod
-        def showMessage_nearFrogWindow_(cls, msg, frog_win):
-            fw = frog_win.frame()
-            bw_w, bw_h = 220, 80
-            # Position bubble above the frog
-            bx = fw.origin.x + fw.size.width / 2 - bw_w / 2
-            by = fw.origin.y + fw.size.height + 6
+        def mouseUp_(self, event):
+            loc = event.locationInWindow()
+            cx_btn = CLOSE_X
+            cy_btn = CLOSE_Y + TAIL_H
+            dx = loc.x - cx_btn
+            dy = loc.y - cy_btn
+            if dx*dx + dy*dy <= CLOSE_R*CLOSE_R:
+                if self._close_cb:
+                    self._close_cb()
 
-            win = cls.alloc().initWithContentRect_styleMask_backing_defer_(
-                NSMakeRect(bx, by, bw_w, bw_h),
-                NSWindowStyleMaskBorderless,
-                NSBackingStoreBuffered,
-                False,
-            )
-            win.setBackgroundColor_(NSColor.clearColor())
-            win.setOpaque_(False)
-            win.setHasShadow_(False)
-            win.setLevel_(NSFloatingWindowLevel)
-            win.setIgnoresMouseEvents_(True)
+        def mouseMoved_(self, event):
+            self._check_hover(event)
+            self.setNeedsDisplay_(True)
 
-            view = BubbleView.alloc().initWithMessage_(msg)
-            win.setContentView_(view)
-            win.makeKeyAndOrderFront_(None)
+        def mouseEntered_(self, event):
+            self._check_hover(event)
+            self.setNeedsDisplay_(True)
 
-            # Auto-close after 5 seconds
-            NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-                5.0, win, "close", None, False
-            )
-            return win
+        def mouseExited_(self, event):
+            self._hovering_close = False
+            self.setNeedsDisplay_(True)
+
+        def _check_hover(self, event):
+            loc = event.locationInWindow()
+            cx_btn = CLOSE_X
+            cy_btn = CLOSE_Y + TAIL_H
+            dx = loc.x - cx_btn
+            dy = loc.y - cy_btn
+            self._hovering_close = (dx*dx + dy*dy <= CLOSE_R*CLOSE_R)
+
 
     # ── Frog view ─────────────────────────────────────────────────────────────
     class FrogView(NSView):
         def initWithFrame_(self, frame):
             self = objc.super(FrogView, self).initWithFrame_(frame)
             if self is None: return None
-            self._frame_count  = 0
-            self._blink_cd     = random.randint(60, 120)
-            self._blinking     = False
-            self._blink_frames = 0
-            self._waving       = False
-            self._wave_frames  = 0
-            self._did_drag     = False
-            self._frog_win     = None   # set after window creation
+            self._fc         = 0
+            self._blink_cd   = random.randint(60, 120)
+            self._blinking   = False
+            self._blink_f    = 0
+            self._waving     = False
+            self._wave_f     = 0
+            self._did_drag   = False
+            self._frog_win   = None
+            self._bubble_win = None
             return self
 
         def isOpaque(self): return False
@@ -330,233 +358,9 @@ if OS == "Darwin":
             NSColor.clearColor().set()
             NSBezierPath.fillRect_(self.bounds())
 
-            self._frame_count += 1
-            bob = int(2 * (0.5 - abs((self._frame_count % BOB_PERIOD) /
-                                      BOB_PERIOD - 0.5)) * 2)
+            self._fc += 1
+            bob = int(2*(0.5 - abs((self._fc % BOB_PERIOD)/BOB_PERIOD - 0.5))*2)
 
-            if self._waving:
-                sprite = FROG_WAVE
-                self._wave_frames -= 1
-                if self._wave_frames <= 0:
-                    self._waving = False
-            elif self._blinking:
-                sprite = FROG_BLINK
-                self._blink_frames -= 1
-                if self._blink_frames <= 0:
-                    self._blinking = False
-                    self._blink_cd = random.randint(60, 120)
-            else:
-                sprite = FROG_IDLE
-                self._blink_cd -= 1
-                if self._blink_cd <= 0:
-                    self._blinking     = True
-                    self._blink_frames = 4
-
-            for row in range(ROWS):
-                for col in range(COLS):
-                    cid = sprite[row][col]
-                    if cid == 0: continue
-                    r, g, b = PALETTE[cid]
-                    NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                        r/255, g/255, b/255, 1.0).set()
-                    flipped = (ROWS - 1 - row)
-                    NSBezierPath.fillRect_(NSMakeRect(
-                        col * PIXEL_SIZE,
-                        flipped * PIXEL_SIZE + bob,
-                        PIXEL_SIZE, PIXEL_SIZE,
-                    ))
-
-        def tick_(self, timer):
-            self.setNeedsDisplay_(True)
-
-        def mouseDown_(self, event):
-            self._drag_start = event.locationInWindow()
-            self._did_drag   = False
-
-        def mouseDragged_(self, event):
-            self._did_drag = True
-            loc   = event.locationInWindow()
-            frame = self.window().frame()
-            dx = loc.x - self._drag_start.x
-            dy = loc.y - self._drag_start.y
-            self.window().setFrameOrigin_(
-                NSMakePoint(frame.origin.x + dx, frame.origin.y + dy))
-
-        def mouseUp_(self, event):
-            if not self._did_drag:
-                self.triggerWave()
-
-        def rightMouseDown_(self, event):
-            menu = NSMenu.alloc().initWithTitle_("FrogPal")
-            for title, sel in [
-                ("Wave! 🐸",          "waveAction:"),
-                (None, None),
-                ("Remind me now 💧",  "remindAction:"),
-                ("Quit",              "quitAction:"),
-            ]:
-                if title is None:
-                    menu.addItem_(NSMenuItem.separatorItem())
-                else:
-                    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                        title, sel, "")
-                    item.setTarget_(self)
-                    menu.addItem_(item)
-            NSMenu.popUpContextMenu_withEvent_forView_(menu, event, self)
-
-        def triggerWave(self):
-            if not self._waving:
-                self._waving      = True
-                self._wave_frames = IDLE_FPS * 2
-
-        def showBubble_(self, msg):
-            if self._frog_win:
-                BubbleWindow.showMessage_nearFrogWindow_(msg, self._frog_win)
-
-        def waveAction_(self, sender):   self.triggerWave()
-        def remindAction_(self, sender): self._do_remind()
-        def quitAction_(self, sender):   NSApp.terminate_(None)
-
-        def _do_remind(self):
-            msg = random.choice(WATER_MSGS)
-            self.triggerWave()
-            play_ribbit()
-            self.showBubble_(msg)
-            send_notification("FrogPal 🐸", msg)
-
-        def remindFromThread(self):
-            """Called safely from the background thread via performSelectorOnMainThread."""
-            self._do_remind()
-
-    def run_macos():
-        app = NSApplication.sharedApplication()
-        app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
-
-        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(100, 600, WIN_W, WIN_H),
-            NSWindowStyleMaskBorderless,
-            NSBackingStoreBuffered,
-            False,
-        )
-        win.setBackgroundColor_(NSColor.clearColor())
-        win.setOpaque_(False)
-        win.setHasShadow_(False)
-        win.setLevel_(NSFloatingWindowLevel)
-        win.setCollectionBehavior_(1 << 3 | 1 << 6)
-        win.setIgnoresMouseEvents_(False)
-        win.setAcceptsMouseMovedEvents_(True)
-
-        view = FrogView.alloc().initWithFrame_(NSMakeRect(0, 0, WIN_W, WIN_H))
-        view._frog_win = win
-        win.setContentView_(view)
-        win.makeKeyAndOrderFront_(None)
-
-        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            1.0 / IDLE_FPS, view, "tick:", None, True
-        )
-
-        # Pre-generate the ribbit sound in background
-        threading.Thread(target=lambda: play_ribbit(), daemon=True).start()
-
-        def reminder_loop():
-            last_hour = -1
-            while True:
-                now = datetime.datetime.now()
-                h, m = now.hour, now.minute
-                if h in REMINDER_HOURS and m == 0 and h != last_hour:
-                    last_hour = h
-                    # Must call UI stuff on main thread
-                    view.performSelectorOnMainThread_withObject_waitUntilDone_(
-                        "remindFromThread", None, False
-                    )
-                time.sleep(30)  # check every 30 seconds
-
-        threading.Thread(target=reminder_loop, daemon=True).start()
-        app.run()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Windows / Linux backend — tkinter
-# ══════════════════════════════════════════════════════════════════════════════
-else:
-    import tkinter as tk
-
-    TRANSPARENT_COLOR = "#010101"
-
-    def _hex(pid):
-        if pid == 0: return TRANSPARENT_COLOR
-        r, g, b = PALETTE[pid]
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def draw_sprite(canvas, sprite, offset_y=0):
-        canvas.delete("sprite")
-        for row in range(ROWS):
-            for col in range(COLS):
-                cid = sprite[row][col]
-                if cid == 0: continue
-                x0 = col * PIXEL_SIZE
-                y0 = row * PIXEL_SIZE + offset_y
-                canvas.create_rectangle(
-                    x0, y0, x0+PIXEL_SIZE, y0+PIXEL_SIZE,
-                    fill=_hex(cid), outline="", tags="sprite")
-
-    class BubbleTk(tk.Toplevel):
-        def __init__(self, parent, msg, frog_x, frog_y):
-            super().__init__(parent)
-            self.overrideredirect(True)
-            self.attributes("-topmost", True)
-            self.configure(bg="#2e7d32")
-            w, h = 220, 60
-            x = frog_x
-            y = frog_y - h - 10
-            self.geometry(f"{w}x{h}+{x}+{y}")
-            tk.Label(self, text=msg, bg="#2e7d32", fg="white",
-                     font=("Arial", 10, "bold"), wraplength=200,
-                     justify="center").pack(expand=True)
-            self.after(5000, self.destroy)
-
-    class FrogPalTk:
-        def __init__(self):
-            self.root = tk.Tk()
-            self.root.overrideredirect(True)
-            self.root.attributes("-topmost", True)
-            self.root.geometry(f"{WIN_W}x{WIN_H}+100+100")
-            self.root.configure(bg=TRANSPARENT_COLOR)
-            if OS == "Windows":
-                self.root.attributes("-transparentcolor", TRANSPARENT_COLOR)
-            else:
-                self.root.attributes("-alpha", 0.95)
-
-            self.canvas = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
-                bg=TRANSPARENT_COLOR, highlightthickness=0, borderwidth=0)
-            self.canvas.pack()
-
-            self._frame    = 0
-            self._blink_cd = random.randint(60, 120)
-            self._blinking = False
-            self._blink_f  = 0
-            self._waving   = False
-            self._wave_f   = 0
-
-            self.canvas.bind("<ButtonPress-1>",  self._drag_start)
-            self.canvas.bind("<B1-Motion>",       self._drag_motion)
-            self.canvas.bind("<ButtonRelease-1>", self._drag_end)
-            self.canvas.bind("<Button-3>",        self._show_menu)
-
-            self._menu = tk.Menu(self.root, tearoff=0)
-            self._menu.add_command(label="Wave! 🐸",         command=self._wave)
-            self._menu.add_separator()
-            self._menu.add_command(label="Remind me now 💧", command=self._remind)
-            self._menu.add_separator()
-            self._menu.add_command(label="Quit",              command=self.root.destroy)
-
-            self._animate()
-            threading.Thread(target=self._reminder_loop, daemon=True).start()
-            # Pre-generate ribbit
-            threading.Thread(target=play_ribbit, daemon=True).start()
-
-        def _animate(self):
-            self._frame += 1
-            bob = int(2 * (0.5 - abs((self._frame % BOB_PERIOD)/BOB_PERIOD - 0.5)) * 2)
             if self._waving:
                 sprite = FROG_WAVE
                 self._wave_f -= 1
@@ -573,50 +377,307 @@ else:
                 if self._blink_cd <= 0:
                     self._blinking = True
                     self._blink_f  = 4
-            draw_sprite(self.canvas, sprite, bob)
-            self.root.after(1000 // IDLE_FPS, self._animate)
 
-        def _drag_start(self, e):
-            self._dx = e.x_root - self.root.winfo_x()
-            self._dy = e.y_root - self.root.winfo_y()
+            for row in range(ROWS):
+                for col in range(COLS):
+                    cid = sprite[row][col]
+                    if cid == 0: continue
+                    rv, gv, bv = PALETTE[cid]
+                    NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                        rv/255, gv/255, bv/255, 1.0).set()
+                    NSBezierPath.fillRect_(NSMakeRect(
+                        col*PIXEL_SIZE,
+                        (ROWS-1-row)*PIXEL_SIZE + bob,
+                        PIXEL_SIZE, PIXEL_SIZE))
+
+        def tick_(self, timer):
+            # Keep frog on top every tick
+            if self._frog_win:
+                self._frog_win.orderFrontRegardless()
+            self.setNeedsDisplay_(True)
+
+        # ── Drag ──────────────────────────────────────────────────────────────
+        def mouseDown_(self, event):
+            self._drag_origin = event.locationInWindow()
             self._did_drag = False
 
-        def _drag_motion(self, e):
+        def mouseDragged_(self, event):
             self._did_drag = True
-            self.root.geometry(f"+{e.x_root-self._dx}+{e.y_root-self._dy}")
+            loc = event.locationInWindow()
+            f   = self.window().frame()
+            dx  = loc.x - self._drag_origin.x
+            dy  = loc.y - self._drag_origin.y
+            self.window().setFrameOrigin_(
+                NSMakePoint(f.origin.x + dx, f.origin.y + dy))
+            # Move bubble with frog if visible
+            self._reposition_bubble()
 
-        def _drag_end(self, e):
-            if not self._did_drag: self._wave()
+        def mouseUp_(self, event):
+            if not self._did_drag:
+                self._trigger_wave()
 
-        def _show_menu(self, e):
-            try: self._menu.tk_popup(e.x_root, e.y_root)
-            finally: self._menu.grab_release()
+        # ── Right-click menu ──────────────────────────────────────────────────
+        def rightMouseDown_(self, event):
+            menu = NSMenu.alloc().initWithTitle_("FrogPal")
+            for title, sel in [
+                ("Wave! 🐸",         "waveAction:"),
+                (None, None),
+                ("Remind me now 💧", "remindAction:"),
+                ("Quit",             "quitAction:"),
+            ]:
+                if title is None:
+                    menu.addItem_(NSMenuItem.separatorItem())
+                else:
+                    item = NSMenuItem.alloc()\
+                        .initWithTitle_action_keyEquivalent_(title, sel, "")
+                    item.setTarget_(self)
+                    menu.addItem_(item)
+            NSMenu.popUpContextMenu_withEvent_forView_(menu, event, self)
 
-        def _wave(self):
-            self._waving = True
-            self._wave_f = IDLE_FPS * 2
+        def waveAction_(self, _):   self._trigger_wave()
+        def remindAction_(self, _): self._do_remind()
+        def quitAction_(self, _):   NSApp.terminate_(None)
 
-        def _remind(self):
-            msg = random.choice(WATER_MSGS)
-            self._wave()
+        def _trigger_wave(self):
+            if not self._waving:
+                self._waving = True
+                self._wave_f = IDLE_FPS * 2
+
+        # ── Remind ────────────────────────────────────────────────────────────
+        def _do_remind(self):
+            msg_str = random.choice(WATER_MSGS)
+            self._trigger_wave()
             play_ribbit()
-            fx = self.root.winfo_x()
-            fy = self.root.winfo_y()
-            BubbleTk(self.root, msg, fx, fy)
-            send_notification("FrogPal 🐸", msg)
+            self._show_bubble(msg_str)
 
-        def _reminder_loop(self):
+        def remindFromThread(self):
+            self._do_remind()
+
+        # ── Bubble ────────────────────────────────────────────────────────────
+        def _show_bubble(self, msg_str):
+            # Close any existing bubble
+            self._close_bubble()
+
+            if not self._frog_win: return
+
+            fw = self._frog_win.frame()
+            bx = fw.origin.x + fw.size.width/2 - BUBBLE_W/2
+            by = fw.origin.y + fw.size.height + 4   # just above frog
+
+            bwin = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+                NSMakeRect(bx, by, BUBBLE_W, BUBBLE_H + TAIL_H),
+                NSWindowStyleMaskBorderless,
+                NSBackingStoreBuffered,
+                False)
+            bwin.setBackgroundColor_(NSColor.clearColor())
+            bwin.setOpaque_(False)
+            bwin.setHasShadow_(True)
+            bwin.setLevel_(NSStatusWindowLevel)
+            bwin.setIgnoresMouseEvents_(False)
+            bwin.setAcceptsMouseMovedEvents_(True)
+
+            view = BubbleView.alloc().initWithMessage_onClose_(
+                msg_str, self._close_bubble)
+            bwin.setContentView_(view)
+            bwin.orderFrontRegardless()
+
+            self._bubble_win = bwin
+
+        def _close_bubble(self):
+            if self._bubble_win:
+                self._bubble_win.orderOut_(None)
+                self._bubble_win = None
+
+        def _reposition_bubble(self):
+            if self._bubble_win and self._frog_win:
+                fw = self._frog_win.frame()
+                bx = fw.origin.x + fw.size.width/2 - BUBBLE_W/2
+                by = fw.origin.y + fw.size.height + 4
+                self._bubble_win.setFrameOrigin_(NSMakePoint(bx, by))
+
+
+    def run_macos():
+        app = NSApplication.sharedApplication()
+        app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
+        # ── Center frog on main screen ────────────────────────────────────────
+        screen_frame = NSScreen.mainScreen().frame()
+        sx = screen_frame.size.width / 2  - WIN_W / 2
+        sy = screen_frame.size.height / 2 - WIN_H / 2
+
+        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(sx, sy, WIN_W, WIN_H),
+            NSWindowStyleMaskBorderless,
+            NSBackingStoreBuffered,
+            False)
+        win.setBackgroundColor_(NSColor.clearColor())
+        win.setOpaque_(False)
+        win.setHasShadow_(False)
+        win.setLevel_(NSStatusWindowLevel)         # above all normal windows
+        win.setCollectionBehavior_(
+            1<<3 |  # NSWindowCollectionBehaviorCanJoinAllSpaces
+            1<<6 |  # NSWindowCollectionBehaviorStationary
+            1<<12   # NSWindowCollectionBehaviorFullScreenAuxiliary
+        )
+        win.setIgnoresMouseEvents_(False)
+        win.setAcceptsMouseMovedEvents_(True)
+
+        view = FrogView.alloc().initWithFrame_(NSMakeRect(0, 0, WIN_W, WIN_H))
+        view._frog_win = win
+        win.setContentView_(view)
+        win.orderFrontRegardless()
+
+        # Animation + keep-on-top timer
+        NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            1.0/IDLE_FPS, view, "tick:", None, True)
+
+        # Pre-generate ribbit
+        threading.Thread(target=play_ribbit, daemon=True).start()
+
+        # Reminder thread
+        def reminder_loop():
             last_hour = -1
             while True:
                 now = datetime.datetime.now()
                 h, m = now.hour, now.minute
                 if h in REMINDER_HOURS and m == 0 and h != last_hour:
                     last_hour = h
-                    self.root.after(0, self._remind)
+                    view.performSelectorOnMainThread_withObject_waitUntilDone_(
+                        "remindFromThread", None, False)
                 time.sleep(30)
 
-        def run(self):
-            self.root.mainloop()
+        threading.Thread(target=reminder_loop, daemon=True).start()
+        app.run()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Windows / Linux — tkinter fallback
+# ══════════════════════════════════════════════════════════════════════════════
+else:
+    import tkinter as tk
+
+    TC = "#010101"
+
+    def _hex(pid):
+        if pid == 0: return TC
+        r,g,b = PALETTE[pid]
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def draw_sprite(canvas, sprite, dy=0):
+        canvas.delete("sprite")
+        for row in range(ROWS):
+            for col in range(COLS):
+                cid = sprite[row][col]
+                if cid == 0: continue
+                x0 = col*PIXEL_SIZE; y0 = row*PIXEL_SIZE+dy
+                canvas.create_rectangle(x0,y0,x0+PIXEL_SIZE,y0+PIXEL_SIZE,
+                                        fill=_hex(cid),outline="",tags="sprite")
+
+    class BubbleTk(tk.Toplevel):
+        def __init__(self, parent, msg, frog_x, frog_y, frog_w):
+            super().__init__(parent)
+            self.overrideredirect(True)
+            self.attributes("-topmost", True)
+            self.configure(bg="#ffe010")
+            w = 230
+            x = frog_x + frog_w//2 - w//2
+            y = frog_y - 70
+            self.geometry(f"{w}x60+{x}+{y}")
+            frm = tk.Frame(self, bg="#ffe010")
+            frm.pack(fill="both", expand=True)
+            tk.Label(frm, text=msg, bg="#ffe010", fg="#2a1a00",
+                     font=("Arial",10,"bold"), wraplength=190,
+                     justify="center").pack(side="left", expand=True, padx=6)
+            tk.Button(frm, text="✕", command=self.destroy,
+                      bg="#e05020", fg="white", relief="flat",
+                      font=("Arial",9,"bold"), cursor="hand2",
+                      padx=4).pack(side="right", padx=4, pady=4)
+
+    class FrogPalTk:
+        def __init__(self):
+            self.root = tk.Tk()
+            self.root.overrideredirect(True)
+            self.root.attributes("-topmost", True)
+
+            # Center on screen
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            sx = sw//2 - WIN_W//2
+            sy = sh//2 - WIN_H//2
+            self.root.geometry(f"{WIN_W}x{WIN_H}+{sx}+{sy}")
+            self.root.configure(bg=TC)
+            if OS=="Windows": self.root.attributes("-transparentcolor", TC)
+            else:              self.root.attributes("-alpha", 0.95)
+
+            self.canvas = tk.Canvas(self.root, width=WIN_W, height=WIN_H,
+                bg=TC, highlightthickness=0, borderwidth=0)
+            self.canvas.pack()
+            self._bubble = None
+
+            self._fc=0; self._blink_cd=random.randint(60,120)
+            self._blinking=False; self._blink_f=0
+            self._waving=False; self._wave_f=0
+
+            self.canvas.bind("<ButtonPress-1>",  self._ds)
+            self.canvas.bind("<B1-Motion>",       self._dm)
+            self.canvas.bind("<ButtonRelease-1>", self._du)
+            self.canvas.bind("<Button-3>",        self._menu_show)
+
+            self._menu = tk.Menu(self.root, tearoff=0)
+            self._menu.add_command(label="Wave! 🐸",         command=self._wave)
+            self._menu.add_separator()
+            self._menu.add_command(label="Remind me now 💧", command=self._remind)
+            self._menu.add_separator()
+            self._menu.add_command(label="Quit",              command=self.root.destroy)
+
+            self._animate()
+            threading.Thread(target=self._reminder_loop, daemon=True).start()
+            threading.Thread(target=play_ribbit, daemon=True).start()
+
+        def _animate(self):
+            self._fc += 1
+            bob = int(2*(0.5-abs((self._fc%BOB_PERIOD)/BOB_PERIOD-0.5))*2)
+            if self._waving:
+                sprite=FROG_WAVE; self._wave_f-=1
+                if self._wave_f<=0: self._waving=False
+            elif self._blinking:
+                sprite=FROG_BLINK; self._blink_f-=1
+                if self._blink_f<=0:
+                    self._blinking=False; self._blink_cd=random.randint(60,120)
+            else:
+                sprite=FROG_IDLE; self._blink_cd-=1
+                if self._blink_cd<=0: self._blinking=True; self._blink_f=4
+            draw_sprite(self.canvas, sprite, bob)
+            self.root.attributes("-topmost", True)   # re-enforce every frame
+            self.root.after(1000//IDLE_FPS, self._animate)
+
+        def _ds(self,e): self._ox=e.x_root-self.root.winfo_x(); self._oy=e.y_root-self.root.winfo_y(); self._dd=False
+        def _dm(self,e): self._dd=True; self.root.geometry(f"+{e.x_root-self._ox}+{e.y_root-self._oy}")
+        def _du(self,e):
+            if not self._dd: self._wave()
+        def _menu_show(self,e):
+            try: self._menu.tk_popup(e.x_root,e.y_root)
+            finally: self._menu.grab_release()
+        def _wave(self): self._waving=True; self._wave_f=IDLE_FPS*2
+
+        def _remind(self):
+            msg = random.choice(WATER_MSGS)
+            self._wave(); play_ribbit()
+            if self._bubble:
+                try: self._bubble.destroy()
+                except: pass
+            self._bubble = BubbleTk(self.root, msg,
+                self.root.winfo_x(), self.root.winfo_y(), WIN_W)
+
+        def _reminder_loop(self):
+            last_hour=-1
+            while True:
+                now=datetime.datetime.now(); h,m=now.hour,now.minute
+                if h in REMINDER_HOURS and m==0 and h!=last_hour:
+                    last_hour=h; self.root.after(0,self._remind)
+                time.sleep(30)
+
+        def run(self): self.root.mainloop()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
