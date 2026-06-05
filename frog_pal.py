@@ -142,6 +142,7 @@ def _make_ribbit_wav():
     return path
 
 def play_ribbit():
+    """Always called in a background thread — never on the main thread."""
     global _RIBBIT_PATH
     if _RIBBIT_PATH is None: _RIBBIT_PATH = _make_ribbit_wav()
     try:
@@ -151,6 +152,10 @@ def play_ribbit():
             winsound.PlaySound(_RIBBIT_PATH, winsound.SND_FILENAME|winsound.SND_ASYNC)
         else: subprocess.Popen(["aplay",_RIBBIT_PATH])
     except: pass
+
+def play_ribbit_async():
+    """Spawn sound in a daemon thread so the main thread is never touched."""
+    threading.Thread(target=play_ribbit, daemon=True).start()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -186,6 +191,8 @@ if OS == "Darwin":
             self._bubble_msg=None   # None = hidden
             self._hover_close=False
             self._win_ref=None
+            # Flag set by background threads; consumed by tick_ on main thread
+            self._remind_pending = False
             return self
 
         def isOpaque(self): return False
@@ -300,8 +307,13 @@ if OS == "Darwin":
             tr=NSMakeRect(10, BUBBLE_BOT_Y+8, WIN_W-42, BUBBLE_BH-16)
             self._bubble_msg.drawInRect_withAttributes_(tr, attrs)
 
-        # ── Timer tick ────────────────────────────────────────────────────────
+        # ── Timer tick (runs on main thread via NSTimer) ──────────────────────
         def tick_(self, _timer):
+            # Consume any pending remind request set by background threads.
+            # Doing it here means ALL AppKit calls stay on the main thread.
+            if self._remind_pending:
+                self._remind_pending = False
+                self._do_remind()
             if self._win_ref:
                 self._win_ref.orderFrontRegardless()
             self.setNeedsDisplay_(True)
@@ -367,24 +379,20 @@ if OS == "Darwin":
             NSMenu.popUpContextMenu_withEvent_forView_(menu,event,self)
 
         def waveAction_(self,_):   self._trigger_wave()
-        def remindAction_(self,_): self._do_remind()
+        def remindAction_(self,_): self._remind_pending = True   # tick_ picks it up
         def quitAction_(self,_):   NSApp.terminate_(None)
 
         def _trigger_wave(self):
             if not self._waving: self._waving=True; self._wave_f=IDLE_FPS*2
 
-        # ── Remind (show bubble) ──────────────────────────────────────────────
+        # ── Remind (show bubble) — only called from tick_ on main thread ─────
         def _do_remind(self):
             self._trigger_wave()
-            play_ribbit()
+            play_ribbit_async()           # sound in background, never blocks main
             self._bubble_msg = random.choice(WATER_MSGS)
             self._hover_close = False
-            self.setNeedsDisplay_(True)
-            if self._win_ref:
-                self._win_ref.orderFrontRegardless()
-
-        def remindFromThread(self):
-            self._do_remind()
+            # No setNeedsDisplay_ or orderFrontRegardless_ here —
+            # tick_ already does both right after calling us.
 
 
     def run_macos():
@@ -427,26 +435,27 @@ if OS == "Darwin":
         NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             1.0/IDLE_FPS, view, "tick:", None, True)
 
-        # Pre-generate ribbit sound
-        threading.Thread(target=play_ribbit, daemon=True).start()
+        # Pre-generate ribbit WAV so the first reminder plays without delay
+        def _pregen():
+            global _RIBBIT_PATH
+            _RIBBIT_PATH = _make_ribbit_wav()
+        threading.Thread(target=_pregen, daemon=True).start()
 
-        # Test reminder after TEST_DELAY_SECS seconds
+        # Test reminder: set flag after TEST_DELAY_SECS; tick_ does the rest
         def test_remind():
             time.sleep(TEST_DELAY_SECS)
-            view.performSelectorOnMainThread_withObject_waitUntilDone_(
-                "remindFromThread", None, False)
+            view._remind_pending = True   # read by tick_ on main thread
 
         threading.Thread(target=test_remind, daemon=True).start()
 
-        # Scheduled reminder thread
+        # Scheduled reminder thread — only ever sets a boolean flag
         def reminder_loop():
             last_hour = -1
             while True:
                 now=datetime.datetime.now(); h,m=now.hour,now.minute
                 if h in REMINDER_HOURS and m==0 and h!=last_hour:
                     last_hour=h
-                    view.performSelectorOnMainThread_withObject_waitUntilDone_(
-                        "remindFromThread", None, False)
+                    view._remind_pending = True
                 time.sleep(30)
 
         threading.Thread(target=reminder_loop, daemon=True).start()
@@ -568,7 +577,7 @@ else:
             self.canvas.place(x=0,y=0)
 
         def _remind(self):
-            self._wave(); play_ribbit()
+            self._wave(); play_ribbit_async()
             self._show_bubble(random.choice(WATER_MSGS))
 
         def _test_remind(self):
