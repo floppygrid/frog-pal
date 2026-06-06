@@ -20,7 +20,7 @@ const SETTINGS_PATH = path.join(app.getPath('userData'), 'frogpal-settings.json'
 const TODO_PATH     = path.join(app.getPath('userData'), 'frogpal-todo.json')
 const STICKY_PATH   = path.join(app.getPath('userData'), 'frogpal-stickies.json')
 
-const DEFAULTS_SETTINGS = { soundEnabled: true, intervalMins: 120 }
+const DEFAULTS_SETTINGS = { soundEnabled: true, intervalMins: 120, character: 'frog' }
 
 function readJSON(p, fallback) {
   try { if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8')) } catch (_) {}
@@ -211,7 +211,7 @@ function openSettings() {
   sx = Math.max(0, Math.min(sx, scrW - 320))
   sy = Math.max(0, Math.min(sy, scrH - 300))
   settingsWin = new BrowserWindow({
-    width: 320, height: 300, x: sx, y: sy,
+    width: 320, height: 420, x: sx, y: sy,
     frame: false, resizable: false, alwaysOnTop: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   })

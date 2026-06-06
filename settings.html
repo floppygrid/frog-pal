@@ -3,277 +3,195 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    @font-face {
-      font-family: 'Jersey20';
-      src: url('assets/Jersey20.ttf') format('truetype');
-    }
+    @font-face { font-family:'Jersey20'; src:url('assets/Jersey20.ttf') format('truetype'); }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin:0; padding:0; box-sizing:border-box; }
 
     html, body {
-      width: 320px;
-      height: 300px;
-      background: #3b200f;
-      font-family: 'Jersey20', monospace;
-      color: #ffe80a;
-      overflow: hidden;
-      -webkit-user-select: none;
-      user-select: none;
+      width:320px; height:420px;
+      background:#3b200f;
+      font-family:'Jersey20', monospace;
+      color:#ffe80a;
+      overflow:hidden;
+      -webkit-user-select:none; user-select:none;
     }
 
-    /* outer pixel border */
     #frame {
-      position: absolute;
-      inset: 0;
-      border: 4px solid #2d8a2d;
-      box-shadow:
-        inset 2px 2px 0 #4caf50,
-        inset -2px -2px 0 #1a5c1a,
-        0 0 0 1px #1a0a00;
-      display: flex;
-      flex-direction: column;
+      position:absolute; inset:0;
+      border:4px solid #2d8a2d;
+      box-shadow: inset 2px 2px 0 #4caf50, inset -2px -2px 0 #1a5c1a, 0 0 0 1px #1a0a00;
+      display:flex; flex-direction:column;
     }
 
-    /* title bar — draggable */
     #titlebar {
-      background: #2d8a2d;
-      border-bottom: 3px solid #1a5c1a;
-      box-shadow: inset 0 -2px 0 #0d3d0d;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 8px;
-      -webkit-app-region: drag;
-      cursor: move;
-      flex-shrink: 0;
+      background:#2d8a2d; border-bottom:3px solid #1a5c1a;
+      box-shadow:inset 0 -2px 0 #0d3d0d;
+      height:34px; flex-shrink:0;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 8px;
+      -webkit-app-region:drag; cursor:move;
     }
-    #titlebar span {
-      font-size: 18px;
-      color: #ffe80a;
-      text-shadow: 2px 2px 0 #1a5c1a;
-      letter-spacing: 1px;
-    }
+    #titlebar span { font-size:18px; color:#ffe80a; text-shadow:2px 2px 0 #1a5c1a; letter-spacing:1px; }
     #close-btn {
-      -webkit-app-region: no-drag;
-      background: #cc1a00;
-      border: 2px solid #7a0e00;
-      box-shadow: 2px 2px 0 #7a0e00;
-      color: #ffe80a;
-      font-family: 'Jersey20', monospace;
-      font-size: 14px;
-      width: 22px; height: 22px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
+      -webkit-app-region:no-drag;
+      background:#cc1a00; border:2px solid #7a0e00; box-shadow:2px 2px 0 #7a0e00;
+      color:#ffe80a; font-family:'Jersey20',monospace; font-size:14px;
+      width:22px; height:22px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
     }
-    #close-btn:hover  { background: #ff2200; transform: translate(0,1px); box-shadow: 1px 1px 0 #7a0e00; }
-    #close-btn:active { transform: translate(2px,2px); box-shadow: none; }
+    #close-btn:hover  { background:#ff2200; transform:translate(0,1px); box-shadow:1px 1px 0 #7a0e00; }
+    #close-btn:active { transform:translate(2px,2px); box-shadow:none; }
 
-    /* content area */
-    #content {
-      flex: 1;
-      padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+    #content { flex:1; padding:12px 16px; display:flex; flex-direction:column; gap:14px; overflow:hidden; }
 
-    /* section label */
-    .label {
-      font-size: 14px;
-      color: #ffe80a;
-      text-shadow: 1px 1px 0 #1a0a00;
-      letter-spacing: 1px;
-      margin-bottom: 6px;
-    }
+    .label { font-size:13px; color:#ffe80a; letter-spacing:1px; margin-bottom:6px; }
 
-    /* ── Toggle ──────────────────────────────────────────────────── */
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .pixel-toggle {
-      display: flex;
-      border: 3px solid #2d8a2d;
-      box-shadow: 2px 2px 0 #0d3d0d;
-    }
+    /* ── Sound toggle ──────────────────────────────────────────── */
+    .pixel-toggle { display:flex; border:3px solid #2d8a2d; box-shadow:2px 2px 0 #0d3d0d; }
     .toggle-opt {
-      padding: 5px 14px;
-      font-family: 'Jersey20', monospace;
-      font-size: 14px;
-      background: #3b200f;
-      color: #888;
-      border: none;
-      cursor: pointer;
-      letter-spacing: 1px;
-      border-right: 2px solid #2d8a2d;
+      padding:5px 14px; font-family:'Jersey20',monospace; font-size:14px;
+      background:#3b200f; color:#888; border:none; cursor:pointer; letter-spacing:1px;
+      border-right:2px solid #2d8a2d;
     }
-    .toggle-opt:last-child { border-right: none; }
-    .toggle-opt.active {
-      background: #2d8a2d;
-      color: #ffe80a;
-      text-shadow: 1px 1px 0 #0d3d0d;
-    }
-    .toggle-opt:hover:not(.active) { background: #4a2a10; color: #ffe80a; }
+    .toggle-opt:last-child { border-right:none; }
+    .toggle-opt.active { background:#2d8a2d; color:#ffe80a; text-shadow:1px 1px 0 #0d3d0d; }
+    .toggle-opt:hover:not(.active) { background:#4a2a10; color:#ffe80a; }
 
-    /* ── Interval picker ─────────────────────────────────────────── */
-    .interval-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
-    }
+    /* ── Interval ─────────────────────────────────────────────── */
+    .interval-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
     .iv-btn {
-      padding: 6px 4px;
-      font-family: 'Jersey20', monospace;
-      font-size: 13px;
-      background: #3b200f;
-      color: #ffe80a;
-      border: 3px solid #2d8a2d;
-      box-shadow: 3px 3px 0 #0d3d0d;
-      cursor: pointer;
-      text-align: center;
-      letter-spacing: 0.5px;
+      padding:6px 4px; font-family:'Jersey20',monospace; font-size:13px;
+      background:#3b200f; color:#ffe80a;
+      border:3px solid #2d8a2d; box-shadow:3px 3px 0 #0d3d0d;
+      cursor:pointer; text-align:center; letter-spacing:0.5px;
     }
-    .iv-btn:hover:not(.active) {
-      background: #4a2a10;
-      box-shadow: 2px 2px 0 #0d3d0d;
-      transform: translate(1px, 1px);
-    }
-    .iv-btn:active, .iv-btn.active {
-      background: #2d8a2d;
-      color: #ffe80a;
-      box-shadow: 1px 1px 0 #0d3d0d;
-      transform: translate(2px, 2px);
-    }
+    .iv-btn:hover:not(.active) { background:#4a2a10; box-shadow:2px 2px 0 #0d3d0d; transform:translate(1px,1px); }
+    .iv-btn.active { background:#2d8a2d; color:#ffe80a; box-shadow:1px 1px 0 #0d3d0d; transform:translate(2px,2px); }
 
-    /* ── Save button ─────────────────────────────────────────────── */
-    #footer {
-      padding: 0 16px 14px;
-      display: flex;
-      justify-content: center;
-      flex-shrink: 0;
+    /* ── Character selector ───────────────────────────────────── */
+    .char-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:7px; }
+
+    .char-btn {
+      padding:8px 4px; font-family:'Jersey20',monospace; font-size:13px;
+      background:#3b200f; color:#ffe80a;
+      border:3px solid #555; box-shadow:3px 3px 0 #0d3d0d;
+      cursor:pointer; text-align:center; letter-spacing:0.5px;
+      transition:none;
     }
+    .char-btn:hover:not(.active) { box-shadow:2px 2px 0 #0d3d0d; transform:translate(1px,1px); }
+    .char-btn.active { box-shadow:1px 1px 0 #0d0d0d; transform:translate(2px,2px); }
+
+    /* Per-character active colours */
+    .char-btn[data-char="frog"].active  { background:#2d6a2d; border-color:#4caf50; color:#ffe80a; }
+    .char-btn[data-char="cat"].active   { background:#b35a00; border-color:#ff8c00; color:#ffe80a; }
+    .char-btn[data-char="bunny"].active { background:#c2185b; border-color:#ff69b4; color:#ffe80a; }
+    .char-btn[data-char="dragon"].active{ background:#1a1a1a; border-color:#5a5a5a; color:#ffe80a; }
+
+    .char-btn[data-char="frog"]:hover:not(.active)  { border-color:#4caf50; }
+    .char-btn[data-char="cat"]:hover:not(.active)   { border-color:#ff8c00; }
+    .char-btn[data-char="bunny"]:hover:not(.active) { border-color:#ff69b4; }
+    .char-btn[data-char="dragon"]:hover:not(.active){ border-color:#5a5a5a; }
+
+    /* ── Save / footer ───────────────────────────────────────── */
+    #footer { padding:0 16px 12px; display:flex; justify-content:center; flex-shrink:0; }
     #save-btn {
-      font-family: 'Jersey20', monospace;
-      font-size: 16px;
-      letter-spacing: 2px;
-      color: #ffe80a;
-      background: #2d8a2d;
-      border: 3px solid #1a5c1a;
-      box-shadow: 4px 4px 0 #0d3d0d;
-      padding: 7px 40px;
-      cursor: pointer;
-      text-shadow: 1px 1px 0 #0d3d0d;
+      font-family:'Jersey20',monospace; font-size:16px; letter-spacing:2px;
+      color:#ffe80a; background:#2d8a2d;
+      border:3px solid #1a5c1a; box-shadow:4px 4px 0 #0d3d0d;
+      padding:7px 40px; cursor:pointer; text-shadow:1px 1px 0 #0d3d0d;
     }
-    #save-btn:hover {
-      background: #3ca83c;
-      box-shadow: 3px 3px 0 #0d3d0d;
-      transform: translate(1px,1px);
-    }
-    #save-btn:active {
-      box-shadow: 1px 1px 0 #0d3d0d;
-      transform: translate(3px,3px);
-    }
-
-    /* saved flash */
+    #save-btn:hover { background:#3ca83c; box-shadow:3px 3px 0 #0d3d0d; transform:translate(1px,1px); }
+    #save-btn:active { box-shadow:1px 1px 0 #0d3d0d; transform:translate(3px,3px); }
     #saved-msg {
-      font-size: 13px;
-      color: #4caf50;
-      text-align: center;
-      height: 16px;
-      margin-top: 4px;
-      opacity: 0;
-      transition: opacity 0.2s;
+      font-size:13px; color:#4caf50; text-align:center;
+      height:16px; margin-top:4px; opacity:0; transition:opacity 0.2s;
     }
-    #saved-msg.show { opacity: 1; }
+    #saved-msg.show { opacity:1; }
   </style>
 </head>
 <body>
-  <div id="frame">
-    <div id="titlebar">
-      <span>🐸 FROGPAL SETTINGS</span>
-      <button id="close-btn">X</button>
-    </div>
-
-    <div id="content">
-
-      <!-- Sound toggle -->
-      <div>
-        <div class="label">🔊 SOUND</div>
-        <div class="toggle-row">
-          <div class="pixel-toggle">
-            <button class="toggle-opt" id="snd-on"  onclick="setSound(true)">ON</button>
-            <button class="toggle-opt" id="snd-off" onclick="setSound(false)">OFF</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Reminder interval -->
-      <div>
-        <div class="label">⏰ REMINDER EVERY</div>
-        <div class="interval-grid">
-          <button class="iv-btn" data-mins="30"  onclick="setInterval(30)">30 MIN</button>
-          <button class="iv-btn" data-mins="60"  onclick="setInterval(60)">1 HR</button>
-          <button class="iv-btn" data-mins="120" onclick="setInterval(120)">2 HR</button>
-          <button class="iv-btn" data-mins="180" onclick="setInterval(180)">3 HR</button>
-        </div>
-      </div>
-
-    </div>
-
-    <div id="footer">
-      <div>
-        <button id="save-btn" onclick="save()">SAVE</button>
-        <div id="saved-msg">✔ SAVED!</div>
-      </div>
-    </div>
+<div id="frame">
+  <div id="titlebar">
+    <span id="title-label">🐸 FROGPAL SETTINGS</span>
+    <button id="close-btn">X</button>
   </div>
 
-  <script>
-    const { ipcRenderer } = require('electron')
+  <div id="content">
 
-    let current = { soundEnabled: true, intervalMins: 120 }
+    <!-- Sound -->
+    <div>
+      <div class="label">🔊 SOUND</div>
+      <div class="pixel-toggle">
+        <button class="toggle-opt" id="snd-on"  onclick="setSound(true)">ON</button>
+        <button class="toggle-opt" id="snd-off" onclick="setSound(false)">OFF</button>
+      </div>
+    </div>
 
-    // Load current settings from main
-    ipcRenderer.invoke('get-settings').then(s => {
-      current = { ...s }
-      render()
-    })
+    <!-- Reminder interval -->
+    <div>
+      <div class="label">⏰ REMINDER EVERY</div>
+      <div class="interval-grid">
+        <button class="iv-btn" data-mins="30"  onclick="setIv(30)">30 MIN</button>
+        <button class="iv-btn" data-mins="60"  onclick="setIv(60)">1 HR</button>
+        <button class="iv-btn" data-mins="120" onclick="setIv(120)">2 HR</button>
+        <button class="iv-btn" data-mins="180" onclick="setIv(180)">3 HR</button>
+      </div>
+    </div>
 
-    function render() {
-      // Sound
-      document.getElementById('snd-on').classList.toggle('active',  current.soundEnabled)
-      document.getElementById('snd-off').classList.toggle('active', !current.soundEnabled)
-      // Interval
-      document.querySelectorAll('.iv-btn').forEach(b => {
-        b.classList.toggle('active', Number(b.dataset.mins) === current.intervalMins)
-      })
-    }
+    <!-- Character -->
+    <div>
+      <div class="label">🎮 CHARACTER</div>
+      <div class="char-grid">
+        <button class="char-btn" data-char="frog"   onclick="setChar('frog')">🐸 FROG</button>
+        <button class="char-btn" data-char="cat"    onclick="setChar('cat')">🐱 CAT</button>
+        <button class="char-btn" data-char="bunny"  onclick="setChar('bunny')">🐰 BUNNY</button>
+        <button class="char-btn" data-char="dragon" onclick="setChar('dragon')">🐲 DRAGON</button>
+      </div>
+    </div>
 
-    function setSound(on) {
-      current.soundEnabled = on
-      render()
-    }
+  </div>
 
-    function setInterval(mins) {
-      current.intervalMins = mins
-      render()
-    }
+  <div id="footer">
+    <div>
+      <button id="save-btn" onclick="save()">SAVE</button>
+      <div id="saved-msg">✔ SAVED!</div>
+    </div>
+  </div>
+</div>
 
-    function save() {
-      ipcRenderer.send('save-settings', current)
-    }
+<script>
+  const { ipcRenderer } = require('electron')
 
-    ipcRenderer.on('settings-saved', () => {
-      const msg = document.getElementById('saved-msg')
-      msg.classList.add('show')
-      setTimeout(() => msg.classList.remove('show'), 1800)
-    })
+  const CHAR_EMOJIS = { frog:'🐸', cat:'🐱', bunny:'🐰', dragon:'🐲' }
+  let current = { soundEnabled:true, intervalMins:120, character:'frog' }
 
-    document.getElementById('close-btn').addEventListener('click', () => {
-      ipcRenderer.send('close-settings')
-    })
-  </script>
+  ipcRenderer.invoke('get-settings').then(s => { current = { ...current, ...s }; render() })
+
+  function render() {
+    document.getElementById('snd-on').classList.toggle('active',  current.soundEnabled)
+    document.getElementById('snd-off').classList.toggle('active', !current.soundEnabled)
+    document.querySelectorAll('.iv-btn').forEach(b =>
+      b.classList.toggle('active', Number(b.dataset.mins) === current.intervalMins))
+    document.querySelectorAll('.char-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.char === current.character))
+    const emoji = CHAR_EMOJIS[current.character] || '🐸'
+    document.getElementById('title-label').textContent = `${emoji} FROGPAL SETTINGS`
+  }
+
+  function setSound(on)   { current.soundEnabled = on; render() }
+  function setIv(mins)    { current.intervalMins = mins; render() }
+  function setChar(name)  { current.character = name; render() }
+
+  function save() { ipcRenderer.send('save-settings', current) }
+
+  ipcRenderer.on('settings-saved', () => {
+    const m = document.getElementById('saved-msg')
+    m.classList.add('show')
+    setTimeout(() => m.classList.remove('show'), 1800)
+  })
+
+  document.getElementById('close-btn').addEventListener('click', () =>
+    ipcRenderer.send('close-settings'))
+</script>
 </body>
 </html>
