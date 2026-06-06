@@ -9,8 +9,8 @@ const BUBBLE_H     = 82
 const TAIL_H       = 14
 const GAP          = 4
 const BUBBLE_AREA  = BUBBLE_H + TAIL_H + GAP
-const MENU_RESERVE = 170
-const WIN_H        = BUBBLE_AREA + FROG_H + MENU_RESERVE   // 366
+const MENU_RESERVE = 260
+const WIN_H        = BUBBLE_AREA + FROG_H + MENU_RESERVE   // 456
 
 const TEST_DELAY_MS  = 20_000
 const GAP_FROM_FROG  = 40
@@ -186,7 +186,7 @@ app.whenReady().then(() => {
   // ── Custom reminder dialog ────────────────────────────────────────────────
   ipcMain.on('open-reminder-dialog', () => {
     if (reminderDlgWin) { reminderDlgWin.focus(); return }
-    reminderDlgWin = spawnNear('reminder-dialog.html', 300, 230, { resizable: false })
+    reminderDlgWin = spawnNear('reminder-dialog.html', 300, 272, { resizable: false })
     reminderDlgWin.on('closed', () => { reminderDlgWin = null })
   })
   ipcMain.on('close-reminder-dialog', () => reminderDlgWin?.close())

@@ -201,12 +201,36 @@ document.addEventListener('mouseup', e => {
 // ── Custom pixel context menu ─────────────────────────────────────────────────
 const ctxMenu = document.getElementById('ctx-menu')
 
-function showCtxMenu(x, y) {
-  // Keep menu inside the 240px window
-  const menuW = 204
-  const clampedX = Math.min(x, 240 - menuW - 4)
-  ctxMenu.style.left = clampedX + 'px'
-  ctxMenu.style.top  = y + 'px'
+// Menu always anchors to the right side of the frog, never at cursor.
+// FROG_X=72, FROG_W=96 → frog right edge inside window = 168
+// Menu opens 8px into the right edge of the frog → x = 160
+const MENU_ANCHOR_X = 160   // slightly inside frog right edge
+const WIN_W_PX      = 240
+const WIN_H_PX      = 456
+const MENU_W_PX     = 208   // measured menu width
+const MENU_H_PX     = 248   // measured menu height (all items + notes row)
+
+function showCtxMenu() {
+  // Measure actual rendered menu height (show hidden, measure, hide)
+  ctxMenu.style.visibility = 'hidden'
+  ctxMenu.style.display    = 'block'
+  const mw = ctxMenu.offsetWidth  || MENU_W_PX
+  const mh = ctxMenu.offsetHeight || MENU_H_PX
+  ctxMenu.style.visibility = ''
+  ctxMenu.style.display    = ''
+
+  // Prefer right side of frog; flip left if it would overflow window width
+  let mx = MENU_ANCHOR_X
+  if (mx + mw > WIN_W_PX - 2) mx = WIN_W_PX - mw - 4
+
+  // Prefer just below frog top (bubble area ends at y=100); clamp so bottom fits
+  const frogTopInWindow = 100   // BUBBLE_AREA
+  let   my = frogTopInWindow + 4
+  if (my + mh > WIN_H_PX - 4) my = WIN_H_PX - mh - 4
+  if (my < 0) my = 4
+
+  ctxMenu.style.left = Math.max(2, mx) + 'px'
+  ctxMenu.style.top  = my + 'px'
   ctxMenu.classList.add('open')
   ipcRenderer.send('mouse-enter-ui')
 }
@@ -217,7 +241,7 @@ function hideCtxMenu() {
 
 document.addEventListener('contextmenu', e => {
   e.preventDefault()
-  showCtxMenu(e.clientX, e.clientY)
+  showCtxMenu()
 })
 
 // Close on any left-click outside the menu
