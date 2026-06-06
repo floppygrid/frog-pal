@@ -1,113 +1,140 @@
 const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron')
+const fs   = require('fs')
+const path = require('path')
 
-// ── Dimensions ────────────────────────────────────────────────────────────────
-const WIN_W        = 240
-const FROG_H       = 96
-const BUBBLE_H     = 82   // bubble body
-const TAIL_H       = 14   // tail triangle
-const GAP          = 4
-const BUBBLE_AREA  = BUBBLE_H + TAIL_H + GAP   // 100
-const WIN_H        = BUBBLE_AREA + FROG_H       // 196
+// ── Window dimensions ─────────────────────────────────────────────────────────
+const WIN_W       = 240
+const FROG_H      = 96
+const BUBBLE_H    = 82
+const TAIL_H      = 14
+const GAP         = 4
+const BUBBLE_AREA = BUBBLE_H + TAIL_H + GAP
+const WIN_H       = BUBBLE_AREA + FROG_H
 
-// ── Reminder schedule ─────────────────────────────────────────────────────────
-const REMINDER_HOURS = new Set([6, 8, 10, 12, 14, 16, 18, 20, 22])
-const TEST_DELAY_MS  = 20_000
+const TEST_DELAY_MS = 20_000
 
-let win
-let dragInterval = null
-let dragOffsetX  = 0
-let dragOffsetY  = 0
+// ── Settings (persisted to userData/settings.json) ────────────────────────────
+const SETTINGS_PATH = path.join(app.getPath('userData'), 'frogpal-settings.json')
+const DEFAULTS = { soundEnabled: true, intervalMins: 120 }  // 120 min = 2 hrs
 
-// ── Window creation ───────────────────────────────────────────────────────────
+function loadSettings() {
+  try {
+    if (fs.existsSync(SETTINGS_PATH))
+      return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) }
+  } catch (_) {}
+  return { ...DEFAULTS }
+}
+
+function saveSettings(s) {
+  try { fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2)) } catch (_) {}
+}
+
+let settings = loadSettings()
+
+// ── Windows ───────────────────────────────────────────────────────────────────
+let win         = null
+let settingsWin = null
+
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide()
 
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
-
-  // Position so the FROG is centred — bubble space is above it
   const winX = Math.round(sw / 2 - WIN_W / 2)
   const winY = Math.round(sh / 2 - BUBBLE_AREA - FROG_H / 2)
 
+  // ── Frog window ──────────────────────────────────────────────────────────
   win = new BrowserWindow({
-    width:       WIN_W,
-    height:      WIN_H,
-    x:           winX,
-    y:           winY,
-    transparent: true,
-    frame:       false,
-    resizable:   false,
-    movable:     false,      // we handle movement ourselves via IPC
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    hasShadow:   false,
-    focusable:   true,
-    webPreferences: {
-      nodeIntegration:  true,
-      contextIsolation: false,
-    },
+    width: WIN_W, height: WIN_H, x: winX, y: winY,
+    transparent: true, frame: false, resizable: false,
+    movable: false, skipTaskbar: true, alwaysOnTop: true, hasShadow: false,
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
   })
-
-  // Highest possible window level on macOS — stays above everything
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-
   win.loadFile('index.html')
-
-  // ── Click-through for transparent areas ──────────────────────────────────
-  // Start by ignoring mouse (clicks pass through to whatever is below)
   win.setIgnoreMouseEvents(true, { forward: true })
 
+  // ── Click-through ─────────────────────────────────────────────────────────
   ipcMain.on('mouse-enter-ui', () => win.setIgnoreMouseEvents(false))
   ipcMain.on('mouse-leave-ui', () => win.setIgnoreMouseEvents(true, { forward: true }))
 
-  // ── Drag ─────────────────────────────────────────────────────────────────
+  // ── Drag ──────────────────────────────────────────────────────────────────
+  let dragInterval = null, dragOffX = 0, dragOffY = 0
   ipcMain.on('drag-start', () => {
     const { x: mx, y: my } = screen.getCursorScreenPoint()
     const [wx, wy] = win.getPosition()
-    dragOffsetX = mx - wx
-    dragOffsetY = my - wy
+    dragOffX = mx - wx; dragOffY = my - wy
     if (dragInterval) clearInterval(dragInterval)
     dragInterval = setInterval(() => {
       const { x, y } = screen.getCursorScreenPoint()
-      win.setPosition(x - dragOffsetX, y - dragOffsetY)
+      win.setPosition(x - dragOffX, y - dragOffY)
     }, 16)
   })
-
   ipcMain.on('drag-end', () => {
     if (dragInterval) { clearInterval(dragInterval); dragInterval = null }
   })
 
-  // ── Context menu ─────────────────────────────────────────────────────────
+  // ── Context menu ──────────────────────────────────────────────────────────
   ipcMain.on('context-menu', () => {
-    const menu = Menu.buildFromTemplate([
-      { label: '🐸  Wave!',           click: () => win.webContents.send('wave') },
+    Menu.buildFromTemplate([
+      { label: '🐸  Wave!',            click: () => win.webContents.send('wave') },
       { type: 'separator' },
-      { label: '💧  Remind me now',   click: () => win.webContents.send('remind') },
+      { label: '💧  Remind me now',    click: () => win.webContents.send('remind', settings) },
+      { label: '⚙️   Settings',         click: openSettings },
       { type: 'separator' },
-      { label: 'Quit',                click: () => app.quit() },
-    ])
-    menu.popup({ window: win })
+      { label: 'Quit',                  click: () => app.quit() },
+    ]).popup({ window: win })
   })
 
-  // ── Reminders ────────────────────────────────────────────────────────────
-  // Test reminder 20 s after launch
-  setTimeout(() => win.webContents.send('remind'), TEST_DELAY_MS)
+  // ── Settings IPC ──────────────────────────────────────────────────────────
+  ipcMain.on('open-settings', openSettings)
 
-  // Check every 60 s. Track fired reminders by "YYYY-MM-DD-HH" so each
-  // scheduled hour fires exactly once per day, no matter how many ticks land.
+  ipcMain.handle('get-settings', () => settings)
+
+  ipcMain.on('save-settings', (_, newSettings) => {
+    settings = newSettings
+    saveSettings(settings)
+    win.webContents.send('settings-updated', settings)
+    if (settingsWin) settingsWin.webContents.send('settings-saved')
+  })
+
+  ipcMain.on('close-settings', () => settingsWin?.close())
+
+  // ── Initial settings push to renderer ────────────────────────────────────
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.send('settings-updated', settings)
+  })
+
+  // ── Test reminder (20 s after launch) ─────────────────────────────────────
+  setTimeout(() => win.webContents.send('remind', settings), TEST_DELAY_MS)
+
+  // ── Scheduled reminders ───────────────────────────────────────────────────
   const fired = new Set()
-
   setInterval(() => {
-    const now  = new Date()
-    const h    = now.getHours()
-    const m    = now.getMinutes()
-    if (!REMINDER_HOURS.has(h)) return          // not a reminder hour
-    if (m > 1) return                           // only fire within first 2 min of the hour
-    const key = `${now.toDateString()}-${h}`
-    if (fired.has(key)) return                  // already fired this hour today
+    const now   = new Date()
+    const h     = now.getHours()
+    const m     = now.getMinutes()
+    const total = h * 60 + m
+    if (total < 6 * 60 || total > 22 * 60) return   // outside 6am–10pm
+    if (total % settings.intervalMins > 1)  return   // not on the interval
+    const key = `${now.toDateString()}-${total}`
+    if (fired.has(key)) return
     fired.add(key)
-    win.webContents.send('remind')
-  }, 60_000)   // check every 60 seconds
+    win.webContents.send('remind', settings)
+  }, 60_000)
 })
+
+// ── Settings window ───────────────────────────────────────────────────────────
+function openSettings() {
+  if (settingsWin) { settingsWin.focus(); return }
+  settingsWin = new BrowserWindow({
+    width: 320, height: 300,
+    frame: false, resizable: false,
+    alwaysOnTop: true, transparent: false,
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  })
+  settingsWin.loadFile('settings.html')
+  settingsWin.on('closed', () => { settingsWin = null })
+}
 
 app.on('window-all-closed', () => app.quit())

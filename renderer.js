@@ -210,10 +210,18 @@ document.addEventListener('mousemove', e => {
   else        ipcRenderer.send('mouse-leave-ui')
 })
 
+// ── Settings state ────────────────────────────────────────────────────────────
+let soundEnabled = true
+
+ipcRenderer.on('settings-updated', (_, s) => {
+  soundEnabled = s.soundEnabled
+})
+
 // ── IPC from main ─────────────────────────────────────────────────────────────
-ipcRenderer.on('remind', () => {
+ipcRenderer.on('remind', (_, s) => {
+  if (s) soundEnabled = s.soundEnabled
   waving = true; waveF = FPS * 2
-  playRibbit()
+  if (soundEnabled) playRibbit()
   showBubble(MSGS[Math.floor(Math.random() * MSGS.length)])
 })
 

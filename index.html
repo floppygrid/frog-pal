@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    @font-face {
+      font-family: 'Jersey20';
+      src: url('assets/Jersey20.ttf') format('truetype');
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     html, body {
@@ -20,13 +25,13 @@
       height: 196px;
     }
 
-    /* ── Bubble area (top 100 px) ────────────────────────────────── */
+    /* ── Reminder bubble ─────────────────────────────────────────── */
     #bubble-wrap {
       position: absolute;
       top: 0; left: 0;
       width: 240px;
       height: 100px;
-      pointer-events: none;   /* invisible by default — pass through */
+      pointer-events: none;
       opacity: 0;
       transition: opacity 0.15s ease;
     }
@@ -37,63 +42,85 @@
 
     #bubble-box {
       position: absolute;
-      top: 0; left: 0;
+      top: 0; left: 2px;
       width: 236px;
       height: 78px;
-      margin: 0 2px;
-      background: #ffe80a;
-      border: 2px solid #a07800;
-      border-radius: 14px;
+      background: #ffb3cc;
+      /* pixel border: 4px solid green with inner highlight */
+      border: 3px solid #1a6b1a;
+      box-shadow:
+        inset 2px 2px 0 #ff85aa,
+        inset -2px -2px 0 #cc6688,
+        3px 3px 0 #0d3d0d;
+      image-rendering: pixelated;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0 32px 0 10px;
+      padding: 0 28px 0 8px;
     }
 
     #bubble-text {
-      font-family: -apple-system, Arial, sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      color: #1a0a00;
+      font-family: 'Jersey20', monospace;
+      font-size: 15px;
+      color: #0d4d0d;
       text-align: center;
-      line-height: 1.35;
+      line-height: 1.3;
+      text-shadow: 1px 1px 0 #ff85aa;
     }
 
+    /* pixel-style close button */
     #bubble-close {
       position: absolute;
-      top: 6px; right: 6px;
+      top: 4px; right: 4px;
       width: 22px; height: 22px;
-      border-radius: 50%;
-      background: #d03010;
-      border: none;
-      color: white;
-      font-size: 12px;
-      font-weight: 900;
+      background: #1a6b1a;
+      border: 2px solid #0d3d0d;
+      box-shadow: 2px 2px 0 #0d3d0d;
+      color: #ffe80a;
+      font-family: 'Jersey20', monospace;
+      font-size: 14px;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      line-height: 1;
+      image-rendering: pixelated;
     }
-    #bubble-close:hover { background: #a81a05; }
+    #bubble-close:hover {
+      background: #cc0000;
+      box-shadow: 1px 1px 0 #0d3d0d;
+      transform: translate(1px, 1px);
+    }
+    #bubble-close:active {
+      box-shadow: none;
+      transform: translate(2px, 2px);
+    }
 
-    /* tail triangle pointing down */
+    /* pixel tail triangle */
     #bubble-tail {
       position: absolute;
       bottom: 0; left: 50%;
       transform: translateX(-50%);
       width: 0; height: 0;
-      border-left:  11px solid transparent;
-      border-right: 11px solid transparent;
-      border-top:   14px solid #ffe80a;
-      filter: drop-shadow(0 1px 0 #a07800);
+      border-left:  10px solid transparent;
+      border-right: 10px solid transparent;
+      border-top:   14px solid #1a6b1a;
+    }
+    #bubble-tail::after {
+      content: '';
+      position: absolute;
+      top: -17px; left: -8px;
+      width: 0; height: 0;
+      border-left:  8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top:   12px solid #ffb3cc;
     }
 
-    /* ── Frog canvas (bottom 96 px) ──────────────────────────────── */
+    /* ── Frog canvas ──────────────────────────────────────────────── */
     #frog-canvas {
       position: absolute;
       top: 100px; left: 0;
       width: 240px;
       height: 96px;
       cursor: grab;
+      image-rendering: pixelated;
     }
     #frog-canvas:active { cursor: grabbing; }
   </style>
@@ -103,7 +130,7 @@
     <div id="bubble-wrap">
       <div id="bubble-box">
         <span id="bubble-text"></span>
-        <button id="bubble-close">✕</button>
+        <button id="bubble-close">X</button>
       </div>
       <div id="bubble-tail"></div>
     </div>
