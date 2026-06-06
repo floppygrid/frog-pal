@@ -117,10 +117,31 @@ app.whenReady().then(() => {
 })
 
 // ── Settings window ───────────────────────────────────────────────────────────
+const SW = 320   // settings window width
+const SH = 300   // settings window height
+const GAP_FROM_FROG = 40
+
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return }
+
+  const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize
+  const [fx, fy] = win.getPosition()
+
+  // Frog's visible centre Y — align settings window with the frog body, not the bubble
+  const frogCentreY = fy + BUBBLE_AREA + FROG_H / 2
+  let sx = fx + WIN_W + GAP_FROM_FROG   // try right side first
+  let sy = Math.round(frogCentreY - SH / 2)
+
+  // If it overflows the right edge, flip to the left
+  if (sx + SW > scrW) sx = fx - SW - GAP_FROM_FROG
+
+  // Clamp both axes so the window is always fully on screen
+  sx = Math.max(0, Math.min(sx, scrW - SW))
+  sy = Math.max(0, Math.min(sy, scrH - SH))
+
   settingsWin = new BrowserWindow({
-    width: 320, height: 300,
+    width: SW, height: SH,
+    x: sx, y: sy,
     frame: false, resizable: false,
     alwaysOnTop: true, transparent: false,
     webPreferences: { nodeIntegration: true, contextIsolation: false },
