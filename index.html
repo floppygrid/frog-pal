@@ -123,6 +123,46 @@
       image-rendering: pixelated;
     }
     #frog-canvas:active { cursor: grabbing; }
+
+    /* ── Pixel right-click menu ───────────────────────────────────── */
+    #ctx-menu {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      min-width: 200px;
+      background: #3b200f;
+      border: 3px solid #2d8a2d;
+      box-shadow: 4px 4px 0 #0d3d0d,
+                  inset 1px 1px 0 #4caf50;
+      font-family: 'Jersey20', monospace;
+      overflow: hidden;
+    }
+    #ctx-menu.open { display: block; }
+
+    .ctx-item {
+      padding: 8px 16px;
+      font-size: 15px;
+      color: #ffe80a;
+      letter-spacing: 1px;
+      cursor: pointer;
+      text-shadow: 1px 1px 0 #1a0a00;
+      white-space: nowrap;
+    }
+    .ctx-item:hover {
+      background: #2d8a2d;
+      box-shadow: inset 2px 0 0 #4caf50;
+      color: #ffe80a;
+    }
+    .ctx-item:active {
+      background: #1a5c1a;
+      transform: translateX(2px);
+    }
+    .ctx-sep {
+      height: 3px;
+      background: #2d8a2d;
+      box-shadow: 0 1px 0 #0d3d0d;
+      margin: 2px 0;
+    }
   </style>
 </head>
 <body>
@@ -135,6 +175,16 @@
       <div id="bubble-tail"></div>
     </div>
     <canvas id="frog-canvas" width="240" height="96"></canvas>
+
+    <!-- Pixel right-click menu -->
+    <div id="ctx-menu">
+      <div class="ctx-item" id="ctx-wave">🐸  Wave!</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item" id="ctx-remind">💧  Remind me now</div>
+      <div class="ctx-item" id="ctx-settings">⚙  Settings</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item" id="ctx-quit">Quit</div>
+    </div>
   </div>
   <script src="renderer.js"></script>
 </body>

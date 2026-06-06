@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, screen } = require('electron')
 const fs   = require('fs')
 const path = require('path')
 
@@ -74,17 +74,7 @@ app.whenReady().then(() => {
     if (dragInterval) { clearInterval(dragInterval); dragInterval = null }
   })
 
-  // ── Context menu ──────────────────────────────────────────────────────────
-  ipcMain.on('context-menu', () => {
-    Menu.buildFromTemplate([
-      { label: '🐸  Wave!',            click: () => win.webContents.send('wave') },
-      { type: 'separator' },
-      { label: '💧  Remind me now',    click: () => win.webContents.send('remind', settings) },
-      { label: '⚙️   Settings',         click: openSettings },
-      { type: 'separator' },
-      { label: 'Quit',                  click: () => app.quit() },
-    ]).popup({ window: win })
-  })
+  // Context menu is now fully custom HTML — handled in renderer.js
 
   // ── Settings IPC ──────────────────────────────────────────────────────────
   ipcMain.on('open-settings', openSettings)
@@ -99,6 +89,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.on('close-settings', () => settingsWin?.close())
+  ipcMain.on('quit', () => app.quit())
 
   // ── Initial settings push to renderer ────────────────────────────────────
   win.webContents.on('did-finish-load', () => {

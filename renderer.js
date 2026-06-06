@@ -191,14 +191,53 @@ document.addEventListener('mouseup', e => {
   if (!didDrag) { waving = true; waveF = FPS * 2 }
 })
 
-// ── Context menu ──────────────────────────────────────────────────────────────
-canvas.addEventListener('contextmenu', e => {
+// ── Custom pixel context menu ─────────────────────────────────────────────────
+const ctxMenu = document.getElementById('ctx-menu')
+
+function showCtxMenu(x, y) {
+  // Keep menu inside the 240px window
+  const menuW = 204
+  const clampedX = Math.min(x, 240 - menuW - 4)
+  ctxMenu.style.left = clampedX + 'px'
+  ctxMenu.style.top  = y + 'px'
+  ctxMenu.classList.add('open')
+  ipcRenderer.send('mouse-enter-ui')
+}
+
+function hideCtxMenu() {
+  ctxMenu.classList.remove('open')
+}
+
+document.addEventListener('contextmenu', e => {
   e.preventDefault()
-  ipcRenderer.send('context-menu')
+  showCtxMenu(e.clientX, e.clientY)
 })
-bubbleWrap.addEventListener('contextmenu', e => {
-  e.preventDefault()
-  ipcRenderer.send('context-menu')
+
+// Close on any left-click outside the menu
+document.addEventListener('click', e => {
+  if (!ctxMenu.contains(e.target)) hideCtxMenu()
+})
+
+document.getElementById('ctx-wave').addEventListener('click', () => {
+  hideCtxMenu()
+  waving = true; waveF = FPS * 2
+})
+
+document.getElementById('ctx-remind').addEventListener('click', () => {
+  hideCtxMenu()
+  waving = true; waveF = FPS * 2
+  if (soundEnabled) playRibbit()
+  showBubble(MSGS[Math.floor(Math.random() * MSGS.length)])
+})
+
+document.getElementById('ctx-settings').addEventListener('click', () => {
+  hideCtxMenu()
+  ipcRenderer.send('open-settings')
+})
+
+document.getElementById('ctx-quit').addEventListener('click', () => {
+  hideCtxMenu()
+  ipcRenderer.send('quit')
 })
 
 // ── Mouse hit-test → pass clicks through transparent areas ───────────────────
