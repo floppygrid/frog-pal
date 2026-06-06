@@ -3,38 +3,63 @@ const fs   = require('fs')
 const path = require('path')
 
 // ── Window dimensions ─────────────────────────────────────────────────────────
-const WIN_W       = 240
-const FROG_H      = 96
-const BUBBLE_H    = 82
-const TAIL_H      = 14
-const GAP         = 4
-const BUBBLE_AREA = BUBBLE_H + TAIL_H + GAP   // 100 — bubble space above frog
-const MENU_RESERVE = 170                        // transparent space below frog for context menu
-const WIN_H       = BUBBLE_AREA + FROG_H + MENU_RESERVE  // 366
+const WIN_W        = 240
+const FROG_H       = 96
+const BUBBLE_H     = 82
+const TAIL_H       = 14
+const GAP          = 4
+const BUBBLE_AREA  = BUBBLE_H + TAIL_H + GAP
+const MENU_RESERVE = 170
+const WIN_H        = BUBBLE_AREA + FROG_H + MENU_RESERVE   // 366
 
-const TEST_DELAY_MS = 20_000
+const TEST_DELAY_MS  = 20_000
+const GAP_FROM_FROG  = 40
 
-// ── Settings (persisted to userData/settings.json) ────────────────────────────
+// ── Persist helpers ───────────────────────────────────────────────────────────
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'frogpal-settings.json')
-const DEFAULTS = { soundEnabled: true, intervalMins: 120 }  // 120 min = 2 hrs
+const TODO_PATH     = path.join(app.getPath('userData'), 'frogpal-todo.json')
+const STICKY_PATH   = path.join(app.getPath('userData'), 'frogpal-stickies.json')
 
-function loadSettings() {
-  try {
-    if (fs.existsSync(SETTINGS_PATH))
-      return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) }
-  } catch (_) {}
-  return { ...DEFAULTS }
+const DEFAULTS_SETTINGS = { soundEnabled: true, intervalMins: 120 }
+
+function readJSON(p, fallback) {
+  try { if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8')) } catch (_) {}
+  return fallback
+}
+function writeJSON(p, data) {
+  try { fs.writeFileSync(p, JSON.stringify(data, null, 2)) } catch (_) {}
 }
 
-function saveSettings(s) {
-  try { fs.writeFileSync(SETTINGS_PATH, JSON.stringify(s, null, 2)) } catch (_) {}
-}
-
-let settings = loadSettings()
+let settings = { ...DEFAULTS_SETTINGS, ...readJSON(SETTINGS_PATH, {}) }
 
 // ── Windows ───────────────────────────────────────────────────────────────────
-let win         = null
-let settingsWin = null
+let win            = null
+let settingsWin    = null
+let todoWin        = null
+let reminderDlgWin = null
+const stickyWins   = new Map()   // id → BrowserWindow
+let nextStickyId   = 1
+
+// ── Helper: spawn a panel near the frog ──────────────────────────────────────
+function spawnNear(file, w, h, opts = {}) {
+  const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize
+  const [fx, fy] = win.getPosition()
+  const frogCY   = fy + BUBBLE_AREA + FROG_H / 2
+  let   sx       = fx + WIN_W + GAP_FROM_FROG
+  let   sy       = Math.round(frogCY - h / 2)
+  if (sx + w > scrW) sx = fx - w - GAP_FROM_FROG
+  sx = Math.max(0, Math.min(sx, scrW - w))
+  sy = Math.max(0, Math.min(sy, scrH - h))
+  const bw = new BrowserWindow({
+    width: w, height: h, x: sx, y: sy,
+    frame: false, resizable: true,
+    alwaysOnTop: true, transparent: false,
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    ...opts,
+  })
+  bw.loadFile(file)
+  return bw
+}
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide()
@@ -75,75 +100,119 @@ app.whenReady().then(() => {
     if (dragInterval) { clearInterval(dragInterval); dragInterval = null }
   })
 
-  // Context menu is now fully custom HTML — handled in renderer.js
-
-  // ── Settings IPC ──────────────────────────────────────────────────────────
+  // ── Settings ──────────────────────────────────────────────────────────────
   ipcMain.on('open-settings', openSettings)
-
   ipcMain.handle('get-settings', () => settings)
-
-  ipcMain.on('save-settings', (_, newSettings) => {
-    settings = newSettings
-    saveSettings(settings)
-    win.webContents.send('settings-updated', settings)
-    if (settingsWin) settingsWin.webContents.send('settings-saved')
+  ipcMain.on('save-settings', (_, s) => {
+    settings = s; writeJSON(SETTINGS_PATH, s)
+    win.webContents.send('settings-updated', s)
+    settingsWin?.webContents.send('settings-saved')
   })
-
   ipcMain.on('close-settings', () => settingsWin?.close())
   ipcMain.on('quit', () => app.quit())
 
-  // ── Initial settings push to renderer ────────────────────────────────────
   win.webContents.on('did-finish-load', () => {
     win.webContents.send('settings-updated', settings)
+    win.webContents.send('sticky-count', stickyWins.size)
   })
 
-  // ── Test reminder (20 s after launch) ─────────────────────────────────────
+  // ── Water reminders ───────────────────────────────────────────────────────
   setTimeout(() => win.webContents.send('remind', settings), TEST_DELAY_MS)
-
-  // ── Scheduled reminders ───────────────────────────────────────────────────
   const fired = new Set()
   setInterval(() => {
-    const now   = new Date()
-    const h     = now.getHours()
-    const m     = now.getMinutes()
+    const now = new Date(), h = now.getHours(), m = now.getMinutes()
     const total = h * 60 + m
-    if (total < 6 * 60 || total > 22 * 60) return   // outside 6am–10pm
-    if (total % settings.intervalMins > 1)  return   // not on the interval
+    if (total < 360 || total > 1320) return
+    if (total % settings.intervalMins > 1) return
     const key = `${now.toDateString()}-${total}`
     if (fired.has(key)) return
     fired.add(key)
     win.webContents.send('remind', settings)
   }, 60_000)
+
+  // ── Todo ──────────────────────────────────────────────────────────────────
+  ipcMain.on('open-todo', () => {
+    if (todoWin) { todoWin.focus(); return }
+    todoWin = spawnNear('todo.html', 320, 460)
+    todoWin.on('closed', () => { todoWin = null })
+  })
+  ipcMain.handle('load-todo', () => readJSON(TODO_PATH, []))
+  ipcMain.on('save-todo', (_, items) => writeJSON(TODO_PATH, items))
+
+  // ── Sticky notes ──────────────────────────────────────────────────────────
+  ipcMain.on('open-sticky', (_, color) => {
+    if (stickyWins.size >= 10) return
+    const id  = nextStickyId++
+    const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize
+    // Cascade from top-right
+    const col = (stickyWins.size % 5)
+    const row = Math.floor(stickyWins.size / 5)
+    const sx  = Math.min(scrW - 200, 60 + col * 30)
+    const sy  = Math.min(scrH - 200, 60 + row * 30 + col * 20)
+
+    const sw = new BrowserWindow({
+      width: 210, height: 210,
+      x: sx, y: sy,
+      frame: false, resizable: true,
+      alwaysOnTop: true, transparent: true, hasShadow: false,
+      webPreferences: { nodeIntegration: true, contextIsolation: false },
+    })
+    sw.loadFile('sticky.html', { query: { id: String(id), color } })
+    stickyWins.set(id, sw)
+    win.webContents.send('sticky-count', stickyWins.size)
+
+    sw.on('closed', () => {
+      stickyWins.delete(id)
+      win.webContents.send('sticky-count', stickyWins.size)
+      // Persist remaining stickies (content saved by renderer before close)
+    })
+  })
+  ipcMain.handle('get-sticky-count', () => stickyWins.size)
+
+  ipcMain.on('save-sticky', (_, { id, content, color }) => {
+    const all = readJSON(STICKY_PATH, {})
+    all[id] = { content, color }
+    writeJSON(STICKY_PATH, all)
+  })
+  ipcMain.on('delete-sticky', (_, id) => {
+    const all = readJSON(STICKY_PATH, {})
+    delete all[id]
+    writeJSON(STICKY_PATH, all)
+  })
+  ipcMain.on('close-sticky', (_, id) => {
+    stickyWins.get(id)?.close()
+  })
+
+  // ── Custom reminder dialog ────────────────────────────────────────────────
+  ipcMain.on('open-reminder-dialog', () => {
+    if (reminderDlgWin) { reminderDlgWin.focus(); return }
+    reminderDlgWin = spawnNear('reminder-dialog.html', 300, 230, { resizable: false })
+    reminderDlgWin.on('closed', () => { reminderDlgWin = null })
+  })
+  ipcMain.on('close-reminder-dialog', () => reminderDlgWin?.close())
+
+  ipcMain.on('set-custom-reminder', (_, { text, delayMs }) => {
+    reminderDlgWin?.close()
+    setTimeout(() => {
+      win.webContents.send('custom-remind', text)
+    }, delayMs)
+  })
 })
 
 // ── Settings window ───────────────────────────────────────────────────────────
-const SW = 320   // settings window width
-const SH = 300   // settings window height
-const GAP_FROM_FROG = 40
-
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return }
-
   const { width: scrW, height: scrH } = screen.getPrimaryDisplay().workAreaSize
   const [fx, fy] = win.getPosition()
-
-  // Frog's visible centre Y — align settings window with the frog body, not the bubble
-  const frogCentreY = fy + BUBBLE_AREA + FROG_H / 2
-  let sx = fx + WIN_W + GAP_FROM_FROG   // try right side first
-  let sy = Math.round(frogCentreY - SH / 2)
-
-  // If it overflows the right edge, flip to the left
-  if (sx + SW > scrW) sx = fx - SW - GAP_FROM_FROG
-
-  // Clamp both axes so the window is always fully on screen
-  sx = Math.max(0, Math.min(sx, scrW - SW))
-  sy = Math.max(0, Math.min(sy, scrH - SH))
-
+  const frogCY   = fy + BUBBLE_AREA + FROG_H / 2
+  let sx = fx + WIN_W + GAP_FROM_FROG
+  let sy = Math.round(frogCY - 300 / 2)
+  if (sx + 320 > scrW) sx = fx - 320 - GAP_FROM_FROG
+  sx = Math.max(0, Math.min(sx, scrW - 320))
+  sy = Math.max(0, Math.min(sy, scrH - 300))
   settingsWin = new BrowserWindow({
-    width: SW, height: SH,
-    x: sx, y: sy,
-    frame: false, resizable: false,
-    alwaysOnTop: true, transparent: false,
+    width: 320, height: 300, x: sx, y: sy,
+    frame: false, resizable: false, alwaysOnTop: true,
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   })
   settingsWin.loadFile('settings.html')

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:210px; height:210px;
+    background:transparent;
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+  }
+
+  /* Colors */
+  .color-pink   { --bg:#FFB3C6; --bg2:#ff85a8; --border:#cc4477; --text:#5a0a22; }
+  .color-blue   { --bg:#B3D4FF; --bg2:#80b8ff; --border:#2255aa; --text:#0a1e4a; }
+  .color-yellow { --bg:#FFF4B3; --bg2:#ffe870; --border:#aa8800; --text:#3a2a00; }
+  .color-green  { --bg:#B3FFD9; --bg2:#70ffbb; --border:#1a8855; --text:#0a2e1e; }
+
+  #note {
+    width:100%; height:100%;
+    background: var(--bg);
+    border:3px solid var(--border);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
+    display:flex; flex-direction:column;
+    position:relative;
+  }
+
+  /* Top bar */
+  #topbar {
+    background: var(--bg2);
+    border-bottom:2px solid var(--border);
+    height:28px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:flex-end;
+    padding:0 6px;
+    -webkit-app-region:drag; cursor:move;
+  }
+
+  #close-btn {
+    -webkit-app-region:no-drag;
+    width:18px; height:18px;
+    background:var(--border); border:1px solid rgba(0,0,0,0.3);
+    color:#fff; font-size:11px; font-weight:bold;
+    cursor:pointer; border-radius:0;
+    display:flex; align-items:center; justify-content:center;
+    line-height:1;
+  }
+  #close-btn:hover { filter:brightness(1.2); }
+
+  /* Content */
+  #content {
+    flex:1;
+    padding:8px;
+    font-family:'Times New Roman', serif;
+    font-size:13px;
+    color: var(--text);
+    outline:none;
+    overflow-y:auto;
+    white-space:pre-wrap;
+    word-break:break-word;
+    -webkit-user-select:text; user-select:text;
+    line-height:1.5;
+    caret-color: var(--text);
+  }
+  #content::-webkit-scrollbar { width:4px; }
+  #content::-webkit-scrollbar-track { background:transparent; }
+  #content::-webkit-scrollbar-thumb { background:var(--border); }
+  #content.empty::before {
+    content: attr(data-placeholder);
+    color: var(--border);
+    font-style:italic;
+    pointer-events:none;
+  }
+
+  /* Bottom color picker */
+  #color-bar {
+    height:24px; flex-shrink:0;
+    border-top:2px solid var(--border);
+    background:var(--bg2);
+    display:flex; align-items:center; justify-content:flex-end;
+    padding:0 6px; gap:5px;
+    -webkit-app-region:no-drag;
+  }
+  .color-dot {
+    width:14px; height:14px;
+    border:2px solid rgba(0,0,0,0.3);
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .color-dot:hover { transform:scale(1.2); }
+  .color-dot.active { border-color:rgba(0,0,0,0.7); box-shadow:0 0 0 1px #fff; }
+  .dot-pink   { background:#FFB3C6; }
+  .dot-blue   { background:#B3D4FF; }
+  .dot-yellow { background:#FFF4B3; }
+  .dot-green  { background:#B3FFD9; }
+</style>
+</head>
+<body>
+<div id="note" class="color-yellow">
+  <div id="topbar">
+    <button id="close-btn" title="Your note will be deleted when closing">✕</button>
+  </div>
+  <div id="content"
+       contenteditable="true"
+       data-placeholder="Add your notes here..."
+       class="empty"></div>
+  <div id="color-bar">
+    <div class="color-dot dot-pink"   data-color="pink"   title="Pink"></div>
+    <div class="color-dot dot-blue"   data-color="blue"   title="Blue"></div>
+    <div class="color-dot dot-yellow" data-color="yellow" title="Yellow"></div>
+    <div class="color-dot dot-green"  data-color="green"  title="Green"></div>
+  </div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron')
+
+// Read params from URL
+const params = new URLSearchParams(window.location.search)
+const id     = params.get('id') || '1'
+let color    = params.get('color') || 'yellow'
+
+const note    = document.getElementById('note')
+const content = document.getElementById('content')
+
+// Apply color
+function applyColor(c) {
+  color = c
+  note.className = `color-${c}`
+  document.querySelectorAll('.color-dot').forEach(d => {
+    d.classList.toggle('active', d.dataset.color === c)
+  })
+  save()
+}
+applyColor(color)
+
+// Placeholder logic
+content.addEventListener('input', () => {
+  content.classList.toggle('empty', content.innerText.trim() === '')
+  save()
+})
+content.addEventListener('focus', () => content.classList.remove('empty'))
+content.addEventListener('blur',  () => {
+  if (!content.innerText.trim()) content.classList.add('empty')
+})
+
+// Color dots
+document.querySelectorAll('.color-dot').forEach(dot => {
+  dot.addEventListener('click', () => applyColor(dot.dataset.color))
+})
+
+// Save
+function save() {
+  ipcRenderer.send('save-sticky', { id: Number(id), content: content.innerHTML, color })
+}
+
+// Close
+document.getElementById('close-btn').addEventListener('click', () => {
+  ipcRenderer.send('delete-sticky', Number(id))
+  window.close()
+})
+
+// Prevent accidental close via keyboard
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'w') e.preventDefault()
+})
+</script>
+</body>
+</html>

@@ -163,6 +163,45 @@
       box-shadow: 0 1px 0 #0d3d0d;
       margin: 2px 0;
     }
+
+    /* ── Notes icon buttons row ───────────────────────────────────── */
+    .ctx-section-label {
+      padding: 5px 16px 2px;
+      font-size: 11px;
+      color: #4caf50;
+      letter-spacing: 2px;
+    }
+    .ctx-notes-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 5px 12px 8px;
+    }
+    .notes-icon-btn {
+      width: 48px; height: 48px;
+      background: #3b200f;
+      border: 3px solid #2d8a2d;
+      box-shadow: 3px 3px 0 #0d3d0d;
+      color: #ffe80a;
+      font-size: 22px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .notes-icon-btn:hover:not(.disabled) {
+      background: #2d8a2d;
+      box-shadow: 2px 2px 0 #0d3d0d;
+      transform: translate(1px,1px);
+    }
+    .notes-icon-btn:active:not(.disabled) {
+      box-shadow: 1px 1px 0 #0d3d0d;
+      transform: translate(2px,2px);
+    }
+    .notes-icon-btn.disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      box-shadow: 1px 1px 0 #0d3d0d;
+    }
   </style>
 </head>
 <body>
@@ -182,6 +221,13 @@
       <div class="ctx-sep"></div>
       <div class="ctx-item" id="ctx-remind">💧  Remind me now</div>
       <div class="ctx-item" id="ctx-settings">⚙  Settings</div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-section-label">NOTES</div>
+      <div class="ctx-notes-row">
+        <button class="notes-icon-btn" id="ctx-todo"     title="Todo List">☑</button>
+        <button class="notes-icon-btn" id="ctx-sticky"   title="Sticky Note">🗒</button>
+        <button class="notes-icon-btn" id="ctx-reminder-custom" title="Set Reminder">🔔</button>
+      </div>
       <div class="ctx-sep"></div>
       <div class="ctx-item" id="ctx-quit">Quit</div>
     </div>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face { font-family:'Jersey20'; src:url('assets/Jersey20.ttf') format('truetype'); }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:300px; height:230px;
+    background:#3b200f;
+    font-family:'Times New Roman', serif;
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+    color:#ffe80a;
+  }
+
+  #frame {
+    height:100%;
+    border:4px solid #2d8a2d;
+    box-shadow: inset 2px 2px 0 #4caf50, inset -2px -2px 0 #1a5c1a;
+    display:flex; flex-direction:column;
+  }
+
+  #titlebar {
+    background:#2d8a2d; border-bottom:3px solid #1a5c1a;
+    box-shadow: inset 0 -2px 0 #0d3d0d;
+    height:34px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 8px;
+    -webkit-app-region:drag; cursor:move;
+    font-family:'Jersey20',monospace;
+  }
+  #titlebar span { font-size:16px; color:#ffe80a; text-shadow:2px 2px 0 #1a5c1a; letter-spacing:1px; }
+  #close-btn {
+    -webkit-app-region:no-drag;
+    background:#cc1a00; border:2px solid #7a0e00; box-shadow:2px 2px 0 #7a0e00;
+    color:#ffe80a; font-family:'Jersey20',monospace; font-size:13px;
+    width:22px; height:22px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #close-btn:hover { background:#ff2200; }
+
+  #body { flex:1; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+
+  /* Remind text */
+  #text-area {
+    width:100%; height:56px;
+    background:#2a1308; color:#ffe80a;
+    border:2px solid #2d8a2d; box-shadow:inset 1px 1px 0 #0d3d0d;
+    padding:6px 8px; resize:none;
+    font-family:'Times New Roman', serif; font-size:14px;
+    outline:none; -webkit-user-select:text; user-select:text;
+    caret-color:#ffe80a;
+  }
+  #text-area::placeholder { color:#7a5530; font-style:italic; }
+  #text-area:focus { border-color:#4caf50; }
+
+  /* Time row */
+  .time-row {
+    display:flex; align-items:center; gap:8px;
+  }
+  .label {
+    font-family:'Jersey20',monospace; font-size:13px;
+    color:#4caf50; letter-spacing:1px; flex-shrink:0;
+  }
+  .pixel-input {
+    background:#2a1308; color:#ffe80a;
+    border:2px solid #2d8a2d; box-shadow:inset 1px 1px 0 #0d3d0d;
+    padding:4px 6px;
+    font-family:'Times New Roman', serif; font-size:14px;
+    outline:none; -webkit-user-select:text; user-select:text;
+    caret-color:#ffe80a;
+  }
+  #duration-val { width:52px; text-align:center; }
+  .pixel-select {
+    background:#2a1308; color:#ffe80a;
+    border:2px solid #2d8a2d;
+    padding:4px 4px;
+    font-family:'Jersey20',monospace; font-size:12px;
+    outline:none; cursor:pointer;
+  }
+
+  /* Tabs */
+  .tab-row { display:flex; gap:0; }
+  .tab {
+    flex:1; padding:4px 0; text-align:center;
+    font-family:'Jersey20',monospace; font-size:12px;
+    background:#3b200f; color:#7a5530;
+    border:2px solid #2d8a2d; cursor:pointer; letter-spacing:1px;
+  }
+  .tab.active { background:#2d8a2d; color:#ffe80a; }
+  .tab:hover:not(.active) { background:#4a2a10; color:#ffe80a; }
+
+  .tab-panel { display:none; }
+  .tab-panel.active { display:flex; align-items:center; gap:8px; }
+
+  /* Error */
+  #error { font-family:'Jersey20',monospace; font-size:11px; color:#ff4444; height:14px; }
+
+  /* Footer */
+  #footer {
+    border-top:2px solid #2d8a2d; padding:8px 14px;
+    display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;
+  }
+  .action-btn {
+    font-family:'Jersey20',monospace; font-size:14px; letter-spacing:1px;
+    border:3px solid #1a5c1a; box-shadow:3px 3px 0 #0d3d0d;
+    padding:5px 16px; cursor:pointer; text-shadow:1px 1px 0 #0d3d0d;
+  }
+  .action-btn.primary { background:#2d8a2d; color:#ffe80a; }
+  .action-btn.primary:hover { background:#3ca83c; box-shadow:2px 2px 0 #0d3d0d; transform:translate(1px,1px); }
+  .action-btn.secondary { background:#3b200f; color:#7a5530; border-color:#2d8a2d; box-shadow:2px 2px 0 #0d3d0d; }
+  .action-btn.secondary:hover { color:#ffe80a; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="titlebar">
+    <span>🔔 SET REMINDER</span>
+    <button id="close-btn">X</button>
+  </div>
+
+  <div id="body">
+    <textarea id="text-area" placeholder="Remind me to..."></textarea>
+
+    <div class="tab-row">
+      <div class="tab active" data-tab="in">IN</div>
+      <div class="tab"       data-tab="at">AT</div>
+    </div>
+
+    <div id="panel-in" class="tab-panel active">
+      <span class="label">IN</span>
+      <input class="pixel-input" id="duration-val" type="number" value="30" min="1" max="999">
+      <select class="pixel-select" id="duration-unit">
+        <option value="60000">MIN</option>
+        <option value="3600000">HR</option>
+      </select>
+    </div>
+
+    <div id="panel-at" class="tab-panel">
+      <span class="label">AT</span>
+      <input class="pixel-input" id="at-time" type="time" value="12:00"
+             style="-webkit-user-select:text;user-select:text;">
+    </div>
+
+    <div id="error"></div>
+  </div>
+
+  <div id="footer">
+    <button class="action-btn secondary" id="cancel-btn">CANCEL</button>
+    <button class="action-btn primary"   id="save-btn">SAVE</button>
+  </div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron')
+
+let activeTab = 'in'
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    activeTab = tab.dataset.tab
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === activeTab))
+    document.getElementById('panel-in').classList.toggle('active', activeTab === 'in')
+    document.getElementById('panel-at').classList.toggle('active', activeTab === 'at')
+  })
+})
+
+function setError(msg) { document.getElementById('error').textContent = msg }
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  const text = document.getElementById('text-area').value.trim()
+  if (!text) { setError('Please enter a reminder text.'); return }
+
+  let delayMs
+  if (activeTab === 'in') {
+    const val  = parseInt(document.getElementById('duration-val').value)
+    const unit = parseInt(document.getElementById('duration-unit').value)
+    if (!val || val < 1) { setError('Enter a valid number.'); return }
+    delayMs = val * unit
+  } else {
+    const timeStr = document.getElementById('at-time').value
+    if (!timeStr) { setError('Pick a time.'); return }
+    const [hh, mm] = timeStr.split(':').map(Number)
+    const target   = new Date(); target.setHours(hh, mm, 0, 0)
+    if (target <= new Date()) target.setDate(target.getDate() + 1)
+    delayMs = target - new Date()
+  }
+
+  setError('')
+  ipcRenderer.send('set-custom-reminder', { text, delayMs })
+})
+
+document.getElementById('cancel-btn').addEventListener('click', () => {
+  ipcRenderer.send('close-reminder-dialog')
+})
+document.getElementById('close-btn').addEventListener('click', () => {
+  ipcRenderer.send('close-reminder-dialog')
+})
+</script>
+</body>
+</html>

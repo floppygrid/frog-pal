@@ -135,8 +135,15 @@ function animate() {
 animate()
 
 // ── Bubble ────────────────────────────────────────────────────────────────────
-function showBubble(msg) {
+function showBubble(msg, bgColor) {
   bubbleText.textContent = msg
+  if (bgColor) {
+    document.getElementById('bubble-box').style.background = bgColor
+    document.getElementById('bubble-tail').style.borderTopColor = bgColor
+  } else {
+    document.getElementById('bubble-box').style.background = ''
+    document.getElementById('bubble-tail').style.borderTopColor = ''
+  }
   bubbleWrap.classList.add('visible')
 }
 function hideBubble() {
@@ -235,9 +242,38 @@ document.getElementById('ctx-settings').addEventListener('click', () => {
   ipcRenderer.send('open-settings')
 })
 
+document.getElementById('ctx-todo').addEventListener('click', () => {
+  hideCtxMenu()
+  ipcRenderer.send('open-todo')
+})
+
+const stickyBtn = document.getElementById('ctx-sticky')
+stickyBtn.addEventListener('click', () => {
+  if (stickyBtn.classList.contains('disabled')) return
+  hideCtxMenu()
+  const colors = ['pink', 'blue', 'yellow', 'green']
+  ipcRenderer.send('open-sticky', colors[Math.floor(Math.random() * colors.length)])
+})
+
+document.getElementById('ctx-reminder-custom').addEventListener('click', () => {
+  hideCtxMenu()
+  ipcRenderer.send('open-reminder-dialog')
+})
+
 document.getElementById('ctx-quit').addEventListener('click', () => {
   hideCtxMenu()
   ipcRenderer.send('quit')
+})
+
+// Track sticky count to disable button at 10
+ipcRenderer.on('sticky-count', (_, count) => {
+  if (count >= 10) {
+    stickyBtn.classList.add('disabled')
+    stickyBtn.title = 'Close some of your stickies to add more'
+  } else {
+    stickyBtn.classList.remove('disabled')
+    stickyBtn.title = 'Sticky Note'
+  }
 })
 
 // ── Mouse hit-test → pass clicks through transparent areas ───────────────────
@@ -251,6 +287,24 @@ document.addEventListener('mousemove', e => {
   if (overUI) ipcRenderer.send('mouse-enter-ui')
   else        ipcRenderer.send('mouse-leave-ui')
 })
+
+// ── Bell sound (for custom reminders) ────────────────────────────────────────
+function playBell() {
+  try {
+    const ac = new AudioContext()
+    ;[880, 660, 550].forEach((freq, i) => {
+      const osc = ac.createOscillator(), gain = ac.createGain()
+      osc.connect(gain); gain.connect(ac.destination)
+      osc.type = 'sine'
+      const t = ac.currentTime + i * 0.22
+      osc.frequency.setValueAtTime(freq, t)
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.04)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9)
+      osc.start(t); osc.stop(t + 0.9)
+    })
+  } catch (_) {}
+}
 
 // ── Settings state ────────────────────────────────────────────────────────────
 let soundEnabled = true
@@ -269,4 +323,11 @@ ipcRenderer.on('remind', (_, s) => {
 
 ipcRenderer.on('wave', () => {
   waving = true; waveF = FPS * 2
+})
+
+// Custom reminder — yellow bubble + bell sound
+ipcRenderer.on('custom-remind', (_, text) => {
+  waving = true; waveF = FPS * 2
+  if (soundEnabled) playBell()
+  showBubble(text, '#fff3b0')
 })
