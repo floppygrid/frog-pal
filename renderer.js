@@ -245,9 +245,9 @@ document.getElementById('ctx-quit').addEventListener('click', () => {
 // We track mouse position here and tell it to stop ignoring when over visible UI.
 document.addEventListener('mousemove', e => {
   const el = document.elementFromPoint(e.clientX, e.clientY)
-  // "over UI" = over canvas or the visible bubble
   const overUI = el === canvas ||
-    (bubbleWrap.classList.contains('visible') && bubbleWrap.contains(el))
+    (bubbleWrap.classList.contains('visible') && bubbleWrap.contains(el)) ||
+    ctxMenu.classList.contains('open') && ctxMenu.contains(el)
   if (overUI) ipcRenderer.send('mouse-enter-ui')
   else        ipcRenderer.send('mouse-leave-ui')
 })

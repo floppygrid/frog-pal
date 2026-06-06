@@ -8,8 +8,9 @@ const FROG_H      = 96
 const BUBBLE_H    = 82
 const TAIL_H      = 14
 const GAP         = 4
-const BUBBLE_AREA = BUBBLE_H + TAIL_H + GAP
-const WIN_H       = BUBBLE_AREA + FROG_H
+const BUBBLE_AREA = BUBBLE_H + TAIL_H + GAP   // 100 — bubble space above frog
+const MENU_RESERVE = 170                        // transparent space below frog for context menu
+const WIN_H       = BUBBLE_AREA + FROG_H + MENU_RESERVE  // 366
 
 const TEST_DELAY_MS = 20_000
 
