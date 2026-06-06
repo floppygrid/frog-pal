@@ -71,17 +71,17 @@ const WAVE = [
 ]
 
 const MSGS = [
-  'Sip sip hooray! Drink water and thrive again! 🥤',
-  'You are a plant. You need water. This is science! 🌿',
-  'Hydration check! Drink your water! 💧',
-  'Hydrated you = glowing, thriving, unstoppable you. ✨',
-  'One sip at a time. It\'s time to hydrate! 🐸',
-  'Did you know? Water is necessary for your brain! Drink that water! 🧠',
-  'Your brain is basically 75% water. Keep the vibes flowing! 💦',
-  'Breaking news: A local frog wants you to drink your water again. 📰',
-  'Water break! Consider it a mini spa moment — just for your insides. 🛁',
-  'A sip at a time keeps the dry skin away. Keep glowing! 🌟',
-  'Splash splash~ Drink some water! 🐸',
+  'Sip sip hooray! Drink water and thrive again!',
+  'You are a plant. You need water. This is science!',
+  'Hydration check! Drink your water!',
+  'Hydrated you = glowing, thriving, unstoppable you.',
+  "One sip at a time. It's time to hydrate!",
+  'Did you know? Water is necessary for your brain! Drink that water!',
+  'Your brain is basically 75% water. Keep the vibes flowing!',
+  'Breaking news: A local frog wants you to drink your water again.',
+  'Water break! Consider it a mini spa moment — just for your insides.',
+  'A sip at a time keeps the dry skin away. Keep glowing!',
+  'Splash splash~ Drink some water!',
 ]
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
