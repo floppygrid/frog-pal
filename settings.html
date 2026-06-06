@@ -182,12 +182,16 @@
   function setIv(mins)    { current.intervalMins = mins; render() }
   function setChar(name)  { current.character = name; render() }
 
-  function save() { ipcRenderer.send('save-settings', current) }
-
-  ipcRenderer.on('settings-saved', () => {
+  function save() {
+    ipcRenderer.send('save-settings', current)
+    // Close after a brief flash so user sees the ✔ confirmation
     const m = document.getElementById('saved-msg')
     m.classList.add('show')
-    setTimeout(() => m.classList.remove('show'), 1800)
+    setTimeout(() => ipcRenderer.send('close-settings'), 700)
+  }
+
+  ipcRenderer.on('settings-saved', () => {
+    // handled above — keep for safety
   })
 
   document.getElementById('close-btn').addEventListener('click', () =>
