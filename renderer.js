@@ -79,7 +79,7 @@ const MSGS = [
   'Did you know? Water is necessary for your brain! Drink that water!',
   'Your brain is basically 75% water. Keep the vibes flowing!',
   'Breaking news: A local frog wants you to drink your water again.',
-  'Water break! Consider it a mini spa moment — just for your insides.',
+  'Water break! Consider it a mini spa moment',
   'A sip at a time keeps the dry skin away. Keep glowing!',
   'Splash splash~ Drink some water!',
 ]
