@@ -202,6 +202,27 @@
       cursor: not-allowed;
       box-shadow: 1px 1px 0 #0d3d0d;
     }
+
+    /* ── Custom tooltip (above everything) ────────────────────────── */
+    #custom-tooltip {
+      display: none;
+      position: fixed;
+      z-index: 99999;
+      background: #3b200f;
+      border: 2px solid #2d8a2d;
+      box-shadow: 3px 3px 0 #0d3d0d, inset 1px 1px 0 #4caf50;
+      color: #ffe80a;
+      font-family: 'Jersey20', monospace;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      padding: 5px 9px;
+      pointer-events: none;
+      white-space: nowrap;
+      max-width: 220px;
+      white-space: normal;
+      line-height: 1.3;
+    }
+    #custom-tooltip.show { display: block; }
   </style>
 </head>
 <body>
@@ -214,6 +235,9 @@
       <div id="bubble-tail"></div>
     </div>
     <canvas id="frog-canvas" width="240" height="96"></canvas>
+
+    <!-- Custom tooltip -->
+    <div id="custom-tooltip"></div>
 
     <!-- Pixel right-click menu -->
     <div id="ctx-menu">

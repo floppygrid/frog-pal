@@ -289,14 +289,46 @@ document.getElementById('ctx-quit').addEventListener('click', () => {
   ipcRenderer.send('quit')
 })
 
+// ── Custom tooltip (renders above context menu z-index) ───────────────────────
+const tooltip = document.getElementById('custom-tooltip')
+
+function showTooltip(el, text) {
+  el.removeAttribute('title')   // suppress native tooltip
+  el._tooltipText = text
+  el.addEventListener('mouseenter', _onEnter)
+  el.addEventListener('mouseleave', _onLeave)
+  el.addEventListener('mousemove',  _onMove)
+}
+
+function _onEnter(e) {
+  tooltip.textContent = e.currentTarget._tooltipText
+  tooltip.classList.add('show')
+  _positionTooltip(e)
+}
+function _onLeave() { tooltip.classList.remove('show') }
+function _onMove(e)  { _positionTooltip(e) }
+function _positionTooltip(e) {
+  const pad = 10
+  let tx = e.clientX + pad
+  let ty = e.clientY - 32
+  // clamp inside window
+  if (tx + 230 > window.innerWidth)  tx = e.clientX - 230 - pad
+  if (ty < 0) ty = e.clientY + pad
+  tooltip.style.left = tx + 'px'
+  tooltip.style.top  = ty + 'px'
+}
+
 // Track sticky count to disable button at 10
 ipcRenderer.on('sticky-count', (_, count) => {
   if (count >= 10) {
     stickyBtn.classList.add('disabled')
-    stickyBtn.title = 'Close some of your stickies to add more'
+    showTooltip(stickyBtn, 'Close some of your stickies to add more')
   } else {
     stickyBtn.classList.remove('disabled')
-    stickyBtn.title = 'Sticky Note'
+    stickyBtn.removeEventListener('mouseenter', _onEnter)
+    stickyBtn.removeEventListener('mouseleave', _onLeave)
+    stickyBtn.removeEventListener('mousemove',  _onMove)
+    tooltip.classList.remove('show')
   }
 })
 
